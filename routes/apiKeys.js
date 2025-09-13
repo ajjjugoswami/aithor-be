@@ -72,13 +72,91 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Delete an API key
-router.delete('/:modelId', authenticateToken, async (req, res) => {
+router.delete('/:keyId', authenticateToken, async (req, res) => {
   try {
-    const { modelId } = req.params;
-    await APIKey.findOneAndDelete({ userId: req.user.userId, modelId });
+    const { keyId } = req.params;
+    const deletedKey = await APIKey.findOneAndDelete({ 
+      _id: keyId, 
+      userId: req.user.userId 
+    });
+    
+    if (!deletedKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+    
     res.json({ message: 'API key deleted' });
   } catch (error) {
     console.error('Error deleting API key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update an API key (set as default, update name, etc.)
+router.put('/:keyId', authenticateToken, async (req, res) => {
+  try {
+    const { keyId } = req.params;
+    const { name, isDefault, key } = req.body;
+
+    // If setting as default, unset all other defaults for this model
+    if (isDefault) {
+      const apiKey = await APIKey.findById(keyId);
+      if (apiKey) {
+        await APIKey.updateMany(
+          { userId: req.user.userId, modelId: apiKey.modelId },
+          { isDefault: false }
+        );
+      }
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (isDefault !== undefined) updateData.isDefault = isDefault;
+    if (key !== undefined) updateData.key = key;
+
+    const updatedKey = await APIKey.findOneAndUpdate(
+      { _id: keyId, userId: req.user.userId },
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    res.json(updatedKey);
+  } catch (error) {
+    console.error('Error updating API key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Set active API key for a model
+router.patch('/:keyId/active', authenticateToken, async (req, res) => {
+  try {
+    const { keyId } = req.params;
+    
+    // Find the key to get the modelId
+    const apiKey = await APIKey.findById(keyId);
+    if (!apiKey || apiKey.userId.toString() !== req.user.userId) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    // Unset all defaults for this model
+    await APIKey.updateMany(
+      { userId: req.user.userId, modelId: apiKey.modelId },
+      { isDefault: false }
+    );
+
+    // Set this key as default
+    const updatedKey = await APIKey.findByIdAndUpdate(
+      keyId,
+      { isDefault: true },
+      { new: true }
+    );
+
+    res.json(updatedKey);
+  } catch (error) {
+    console.error('Error setting active API key:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
