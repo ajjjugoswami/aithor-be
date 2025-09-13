@@ -18,8 +18,8 @@ function generateOTP() {
 // Send OTP email
 async function sendOTPEmail(email, otp) {
   if (!transporter || !process.env.EMAIL_USER) {
-    console.log(`OTP for ${email}: ${otp} (Email not configured)`);
-    return; // Skip sending email if not configured
+    console.log(`OTP for ${email}: ${otp} (Email not configured - check EMAIL_USER and EMAIL_PASS environment variables)`);
+    return { success: false, message: 'Email not configured' }; // Return status instead of throwing
   }
 
   const mailOptions = {
@@ -40,11 +40,12 @@ async function sendOTPEmail(email, otp) {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log('OTP email sent successfully');
+    const result = await transporter.sendMail(mailOptions);
+    console.log(`OTP email sent successfully to ${email}`);
+    return { success: true, messageId: result.messageId };
   } catch (error) {
-    console.error('Error sending OTP email:', error);
-    throw new Error('Failed to send OTP email');
+    console.error(`Error sending OTP email to ${email}:`, error.message);
+    throw new Error(`Failed to send OTP email: ${error.message}`);
   }
 }
 

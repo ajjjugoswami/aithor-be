@@ -41,7 +41,10 @@ router.post('/signup', async (req, res) => {
 
     // Send OTP email
     try {
-      await sendOTPEmail(email, otp);
+      const emailResult = await sendOTPEmail(email, otp);
+      if (!emailResult.success) {
+        console.warn(`OTP email not sent for ${email}: ${emailResult.message}`);
+      }
     } catch (error) {
       console.error('Failed to send OTP email:', error);
       // Continue anyway - OTP is stored in database
@@ -235,6 +238,52 @@ router.post('/google-auth', async (req, res) => {
     });
   } catch (error) {
     console.error('Google auth error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Resend OTP
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user is already verified
+    if (user.isVerified) {
+      return res.status(400).json({ error: 'User is already verified' });
+    }
+
+    // Generate new OTP
+    const otp = generateOTP();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.otp = otp;
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    // Send OTP email
+    try {
+      const emailResult = await sendOTPEmail(email, otp);
+      if (emailResult.success) {
+        res.json({ message: 'OTP sent successfully' });
+      } else {
+        res.status(500).json({ error: `Failed to send OTP: ${emailResult.message}` });
+      }
+    } catch (error) {
+      console.error('Failed to send OTP email:', error);
+      res.status(500).json({ error: 'Failed to send OTP email. Please try again later.' });
+    }
+  } catch (error) {
+    console.error('Resend OTP error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
