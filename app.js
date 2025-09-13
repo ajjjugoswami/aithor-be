@@ -10,8 +10,35 @@ const PORT = process.env.PORT || 8000;
 connectDB();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'https://aithor.vercel.app',
+    'https://chat-with-aithor.vercel.app',
+    'https://aithor-be.vercel.app'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
+
+// Handle preflight requests
+app.options('*', cors({
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'https://aithor.vercel.app',
+    'https://chat-with-aithor.vercel.app',
+    'https://aithor-be.vercel.app'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Basic route
 app.get('/', (req, res) => {
