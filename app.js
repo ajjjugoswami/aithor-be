@@ -29,6 +29,9 @@ app.get('/health', (req, res) => {
 // Auth routes
 app.use('/api/auth', require('./routes/auth'));
 
+// API Keys routes
+app.use('/api/api-keys', require('./routes/apiKeys'));
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
