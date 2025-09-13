@@ -40,7 +40,12 @@ router.post('/signup', async (req, res) => {
     await newUser.save();
 
     // Send OTP email
-    await sendOTPEmail(email, otp);
+    try {
+      await sendOTPEmail(email, otp);
+    } catch (error) {
+      console.error('Failed to send OTP email:', error);
+      // Continue anyway - OTP is stored in database
+    }
 
     res.json({
       message: 'User created successfully. Please verify your email with the OTP sent.',
@@ -132,7 +137,12 @@ router.post('/send-otp', async (req, res) => {
     await user.save();
 
     // Send OTP email
-    await sendOTPEmail(email, otp);
+    try {
+      await sendOTPEmail(email, otp);
+    } catch (error) {
+      console.error('Failed to send OTP email:', error);
+      // Continue anyway - OTP is stored in database
+    }
 
     res.json({ message: 'OTP sent successfully' });
   } catch (error) {

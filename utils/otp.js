@@ -3,11 +3,11 @@ const crypto = require('crypto');
 
 // Create transporter for sending emails
 const transporter = nodemailer.createTransporter({
-  service: 'gmail', // You can change this to your email service
-  auth: {
+  service: process.env.EMAIL_USER && process.env.EMAIL_PASS ? 'gmail' : null,
+  auth: process.env.EMAIL_USER && process.env.EMAIL_PASS ? {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  }
+  } : null
 });
 
 // Generate a 6-digit OTP
@@ -17,6 +17,11 @@ function generateOTP() {
 
 // Send OTP email
 async function sendOTPEmail(email, otp) {
+  if (!transporter || !process.env.EMAIL_USER) {
+    console.log(`OTP for ${email}: ${otp} (Email not configured)`);
+    return; // Skip sending email if not configured
+  }
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
