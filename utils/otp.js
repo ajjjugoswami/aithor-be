@@ -3,11 +3,13 @@ const crypto = require('crypto');
 
 // Create transporter for sending emails
 const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_USER && process.env.EMAIL_PASS ? 'gmail' : null,
-  auth: process.env.EMAIL_USER && process.env.EMAIL_PASS ? {
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  } : null
+  }
 });
 
 // Generate a 6-digit OTP
@@ -17,9 +19,9 @@ function generateOTP() {
 
 // Send OTP email
 async function sendOTPEmail(email, otp) {
-  if (!transporter || !process.env.EMAIL_USER) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log(`OTP for ${email}: ${otp} (Email not configured - check EMAIL_USER and EMAIL_PASS environment variables)`);
-    return { success: false, message: 'Email not configured' }; // Return status instead of throwing
+    return { success: false, message: 'Email not configured' };
   }
 
   const mailOptions = {
