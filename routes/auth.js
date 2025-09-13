@@ -1,43 +1,66 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
+const User = require('../models/User');
 const router = express.Router();
 
-// Mock authentication - in production, use proper auth
-const users = [
-  { id: 1, email: 'user@example.com', password: 'password' }
-];
+// Signup
+router.post('/signup', async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-// Login
-router.post('/login', (req, res) => {
-  const { email, password } = req.body;
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
 
-  const user = users.find(u => u.email === email && u.password === password);
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-  if (user) {
+    // Create new user
+    const newUser = new User({
+      email,
+      password: hashedPassword
+    });
+
+    await newUser.save();
+
     res.json({
       token: 'mock-jwt-token',
-      user: { id: user.id, email: user.email }
+      user: { id: newUser._id, email: newUser.email }
     });
-  } else {
-    res.status(401).json({ error: 'Invalid credentials' });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Signup
-router.post('/signup', (req, res) => {
-  const { email, password } = req.body;
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  const existingUser = users.find(u => u.email === email);
-  if (existingUser) {
-    return res.status(400).json({ error: 'User already exists' });
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    res.json({
+      token: 'mock-jwt-token',
+      user: { id: user._id, email: user.email }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
-
-  const newUser = { id: users.length + 1, email, password };
-  users.push(newUser);
-
-  res.json({
-    token: 'mock-jwt-token',
-    user: { id: newUser.id, email: newUser.email }
-  });
 });
 
 // Verify token (mock)
@@ -45,7 +68,7 @@ router.get('/verify', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (token === 'mock-jwt-token') {
-    res.json({ valid: true, user: { id: 1, email: 'user@example.com' } });
+    res.json({ valid: true, user: { id: 'mock-id', email: 'user@example.com' } });
   } else {
     res.status(401).json({ valid: false });
   }

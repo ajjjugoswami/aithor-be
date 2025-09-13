@@ -13,6 +13,7 @@
     }
   ],
   "env": {
-    "PORT": "8000"
+    "PORT": "8000",
+    "MONGODB_URI": "mongodb+srv://Vercel-Admin-aithor-db:hEpso72ONGjEVrLK@aithor-db.st8w7su.mongodb.net/?retryWrites=true&w=majority"
   }
 }
