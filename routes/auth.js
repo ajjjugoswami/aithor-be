@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { generateOTP, sendOTPEmail } = require('../utils/otp');
 const router = express.Router();
 
 // JWT Secret (in production, use environment variable)
@@ -23,36 +22,26 @@ router.post('/signup', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create new user
+    // Create new user (directly verified)
     const newUser = new User({
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      isVerified: true
     });
 
     await newUser.save();
 
-    // Generate and send OTP
-    const otp = generateOTP();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    newUser.otp = otp;
-    newUser.otpExpires = otpExpires;
-    await newUser.save();
-
-    // Send OTP email
-    try {
-      const emailResult = await sendOTPEmail(email, otp);
-      if (!emailResult.success) {
-        console.warn(`OTP email not sent for ${email}: ${emailResult.message}`);
-      }
-    } catch (error) {
-      console.error('Failed to send OTP email:', error);
-      // Continue anyway - OTP is stored in database
-    }
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: newUser._id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
-      message: 'User created successfully. Please verify your email with the OTP sent.',
-      user: { id: newUser._id, email: newUser.email }
+      message: 'User created successfully.',
+      token,
+      user: { id: newUser._id, email: newUser.email, isVerified: newUser.isVerified }
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -75,11 +64,6 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Check if user is verified
-    if (!user.isVerified) {
-      return res.status(403).json({ error: 'Please verify your email first' });
     }
 
     // Generate JWT token
@@ -115,88 +99,6 @@ router.get('/verify', (req, res) => {
   }
 });
 
-// Send OTP
-router.post('/send-otp', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    // Find user
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Generate OTP
-    const otp = generateOTP();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // Save OTP to user
-    user.otp = otp;
-    user.otpExpires = otpExpires;
-    await user.save();
-
-    // Send OTP email
-    try {
-      await sendOTPEmail(email, otp);
-    } catch (error) {
-      console.error('Failed to send OTP email:', error);
-      // Continue anyway - OTP is stored in database
-    }
-
-    res.json({ message: 'OTP sent successfully' });
-  } catch (error) {
-    console.error('Send OTP error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Verify OTP
-router.post('/verify-otp', async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-
-    if (!email || !otp) {
-      return res.status(400).json({ error: 'Email and OTP are required' });
-    }
-
-    // Find user
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Check if OTP is valid and not expired
-    if (user.otp !== otp || user.otpExpires < new Date()) {
-      return res.status(400).json({ error: 'Invalid or expired OTP' });
-    }
-
-    // Mark user as verified and clear OTP
-    user.isVerified = true;
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    await user.save();
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      token,
-      user: { id: user._id, email: user.email, isVerified: user.isVerified }
-    });
-  } catch (error) {
-    console.error('Verify OTP error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
 // Google OAuth signup/login (placeholder for now)
 router.post('/google-auth', async (req, res) => {
   try {
@@ -212,7 +114,8 @@ router.post('/google-auth', async (req, res) => {
         email: payload.email,
         googleId: payload.sub,
         name: payload.name,
-        picture: payload.picture
+        picture: payload.picture,
+        isVerified: true
       });
       await user.save();
     } else {
@@ -238,52 +141,6 @@ router.post('/google-auth', async (req, res) => {
     });
   } catch (error) {
     console.error('Google auth error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Resend OTP
-router.post('/resend-otp', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    // Find user
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Check if user is already verified
-    if (user.isVerified) {
-      return res.status(400).json({ error: 'User is already verified' });
-    }
-
-    // Generate new OTP
-    const otp = generateOTP();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    user.otp = otp;
-    user.otpExpires = otpExpires;
-    await user.save();
-
-    // Send OTP email
-    try {
-      const emailResult = await sendOTPEmail(email, otp);
-      if (emailResult.success) {
-        res.json({ message: 'OTP sent successfully' });
-      } else {
-        res.status(500).json({ error: `Failed to send OTP: ${emailResult.message}` });
-      }
-    } catch (error) {
-      console.error('Failed to send OTP email:', error);
-      res.status(500).json({ error: 'Failed to send OTP email. Please try again later.' });
-    }
-  } catch (error) {
-    console.error('Resend OTP error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
