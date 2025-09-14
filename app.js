@@ -34,17 +34,9 @@ const swaggerOptions = {
     info: {
       title: 'Aithor Backend API',
       version: '1.0.0',
-      description: 'Backend API for Aithor chat application with AI integration',
-      contact: {
-        name: 'Aithor Support',
-        email: 'support@aithor.com'
-      },
+      description: 'Backend API for Aithor chat application',
     },
     servers: [
-      {
-        url: 'https://aithor-be.vercel.app',
-        description: 'Production server',
-      },
       {
         url: 'http://localhost:8000',
         description: 'Development server',
@@ -65,12 +57,12 @@ const swaggerOptions = {
       },
     ],
   },
-  apis: ['./routes/*.js'], // Path to the API routes
+  apis: ['./routes/*.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-// Swagger UI
+// Swagger UI - Simple setup
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Swagger JSON endpoint
