@@ -241,17 +241,30 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
 router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const User = require('../models/User');
-    const { search } = req.query;
+    const { search, name, email } = req.query;
 
     // Build search query
     let userQuery = {};
     if (search) {
+      // Legacy support for single search field
       userQuery = {
         $or: [
           { name: { $regex: search, $options: 'i' } },
           { email: { $regex: search, $options: 'i' } }
         ]
       };
+    } else {
+      // New separate field search
+      const conditions = [];
+      if (name) {
+        conditions.push({ name: { $regex: name, $options: 'i' } });
+      }
+      if (email) {
+        conditions.push({ email: { $regex: email, $options: 'i' } });
+      }
+      if (conditions.length > 0) {
+        userQuery = conditions.length === 1 ? conditions[0] : { $and: conditions };
+      }
     }
 
     // Get users (filtered by search if provided)
