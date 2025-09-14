@@ -151,6 +151,9 @@ app.use('/api/auth', require('./routes/auth'));
 // API Keys routes
 app.use('/api/api-keys', require('./routes/apiKeys'));
 
+// Feedback routes
+app.use('/api/feedback', require('./routes/feedback'));
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
