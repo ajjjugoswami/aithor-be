@@ -6,7 +6,7 @@ const apiKeySchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  modelId: {
+  provider: {
     type: String,
     required: true
   },
@@ -37,10 +37,7 @@ const apiKeySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Remove unique constraint - allow multiple keys per model per user
-// apiKeySchema.index({ userId: 1, modelId: 1 }, { unique: true });
-
 // Add index for better query performance
-apiKeySchema.index({ userId: 1, modelId: 1 });
+apiKeySchema.index({ userId: 1, provider: 1 });
 
 module.exports = mongoose.model('APIKey', apiKeySchema);
