@@ -6,6 +6,93 @@ const router = express.Router();
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     APIKey:
+ *       type: object
+ *       required:
+ *         - provider
+ *         - key
+ *         - name
+ *       properties:
+ *         _id:
+ *           type: string
+ *           description: The auto-generated id of the API key
+ *         userId:
+ *           type: string
+ *           description: The user ID this key belongs to
+ *         provider:
+ *           type: string
+ *           enum: [ChatGPT, Gemini, DeepSeek, Claude, Perplexity, Ollama]
+ *           description: The AI provider this key is for
+ *         name:
+ *           type: string
+ *           description: User-defined name for this API key
+ *         key:
+ *           type: string
+ *           description: The actual API key (masked in responses)
+ *         isDefault:
+ *           type: boolean
+ *           description: Whether this is the default key for the provider
+ *         isActive:
+ *           type: boolean
+ *           description: Whether this key is active and usable
+ *         usageCount:
+ *           type: integer
+ *           description: Number of times this key has been used
+ *         lastUsed:
+ *           type: string
+ *           format: date-time
+ *           description: Last time this key was used
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: When the key was created
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *           description: When the key was last updated
+ *       example:
+ *         _id: 60d5ecb74b24c72b8c8b4567
+ *         userId: 60d5ecb74b24c72b8c8b4568
+ *         provider: ChatGPT
+ *         name: My ChatGPT Key
+ *         key: sk-************************
+ *         isDefault: true
+ *         isActive: true
+ *         usageCount: 42
+ *         lastUsed: 2023-12-01T10:30:00.000Z
+ *         createdAt: 2023-11-15T08:00:00.000Z
+ *         updatedAt: 2023-12-01T10:30:00.000Z
+ *
+ *     UserWithKeys:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *           description: User ID
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User's email
+ *         name:
+ *           type: string
+ *           description: User's display name
+ *         picture:
+ *           type: string
+ *           description: User's profile picture URL
+ *         isAdmin:
+ *           type: boolean
+ *           description: Whether user is admin
+ *         apiKeys:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/APIKey'
+ *           description: Array of user's API keys
+ */
+
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -31,6 +118,36 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+/**
+ * @swagger
+ * /api/api-keys:
+ *   get:
+ *     summary: Get API keys for authenticated user
+ *     tags: [API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of user's API keys
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/APIKey'
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Get API keys for the authenticated user
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -42,6 +159,70 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/api-keys:
+ *   post:
+ *     summary: Create a new API key
+ *     tags: [API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - provider
+ *               - key
+ *               - name
+ *             properties:
+ *               provider:
+ *                 type: string
+ *                 enum: [ChatGPT, Gemini, DeepSeek, Claude, Perplexity, Ollama]
+ *                 description: The AI provider for this API key
+ *               key:
+ *                 type: string
+ *                 description: The actual API key
+ *               name:
+ *                 type: string
+ *                 description: User-defined name for this API key
+ *               isDefault:
+ *                 type: boolean
+ *                 default: false
+ *                 description: Whether this should be the default key for the provider
+ *             example:
+ *               provider: ChatGPT
+ *               key: sk-1234567890abcdef
+ *               name: My ChatGPT Key
+ *               isDefault: true
+ *     responses:
+ *       201:
+ *         description: API key created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/APIKey'
+ *       400:
+ *         description: Bad request - Missing required fields or duplicate key
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Save a new API key (always creates new, doesn't update existing)
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -237,6 +418,58 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
 
 // ADMIN ROUTES - Only accessible to admin user
 
+/**
+ * @swagger
+ * /api/api-keys/admin/all:
+ *   get:
+ *     summary: Get all users and their API keys (Admin only)
+ *     tags: [Admin, API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter users by name (case-insensitive)
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter users by email (case-insensitive)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Legacy search parameter (searches both name and email)
+ *     responses:
+ *       200:
+ *         description: List of all users with their API keys
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/UserWithKeys'
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Get all users and their API keys (admin only)
 router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   try {

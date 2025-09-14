@@ -7,6 +7,75 @@ const router = express.Router();
 // JWT Secret (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: The auto-generated id of the user
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User's email address
+ *         password:
+ *           type: string
+ *           description: User's password
+ *         name:
+ *           type: string
+ *           description: User's display name
+ *         isAdmin:
+ *           type: boolean
+ *           description: Whether the user has admin privileges
+ *         isVerified:
+ *           type: boolean
+ *           description: Whether the user's email is verified
+ *         picture:
+ *           type: string
+ *           description: URL to user's profile picture
+ *       example:
+ *         id: 60d5ecb74b24c72b8c8b4567
+ *         email: user@example.com
+ *         password: password123
+ *         name: John Doe
+ *         isAdmin: false
+ *         isVerified: true
+ *         picture: https://example.com/picture.jpg
+ *
+ *     AuthResponse:
+ *       type: object
+ *       properties:
+ *         token:
+ *           type: string
+ *           description: JWT authentication token
+ *         user:
+ *           $ref: '#/components/schemas/User'
+ *       example:
+ *         token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *         user:
+ *           id: 60d5ecb74b24c72b8c8b4567
+ *           email: user@example.com
+ *           name: John Doe
+ *           isAdmin: false
+ *           isVerified: true
+ *           picture: https://example.com/picture.jpg
+ *
+ *     Error:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *           description: Error message
+ *       example:
+ *         error: Invalid credentials
+ */
+
 // Middleware to check if user is admin
 const requireAdmin = (req, res, next) => {
   if (!req.user.isAdmin) {
@@ -32,6 +101,57 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/auth/signup:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User's email address
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *                 description: User's password
+ *               name:
+ *                 type: string
+ *                 description: User's display name
+ *             example:
+ *               email: user@example.com
+ *               password: password123
+ *               name: John Doe
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Bad request - User already exists or invalid data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Signup
 router.post('/signup', async (req, res) => {
   try {
@@ -74,6 +194,52 @@ router.post('/signup', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User's email address
+ *               password:
+ *                 type: string
+ *                 description: User's password
+ *             example:
+ *               email: user@example.com
+ *               password: password123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Bad request - Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Login
 router.post('/login', async (req, res) => {
   try {

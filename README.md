@@ -1,5 +1,33 @@
 # aithor-be
 
+Backend API for Aithor chat application with AI integration.
+
+## API Documentation
+
+This API is documented using Swagger/OpenAPI 3.0 specification.
+
+### Accessing API Documentation
+
+Once the server is running, you can access the interactive API documentation at:
+
+- **Swagger UI**: `http://localhost:8000/api-docs` (or your production URL)
+- **OpenAPI JSON**: `http://localhost:8000/swagger.json`
+
+### Authentication
+
+Most endpoints require authentication using JWT tokens. Include the token in the Authorization header:
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+### Key Features
+
+- User authentication and authorization
+- API key management for multiple AI providers
+- Admin panel for user management
+- Server-side filtering for users by name and email
+
 ## Migration: APIKey indexes
 
 If you were previously prevented from saving multiple API keys per provider, your MongoDB may have an index that enforces uniqueness on `(userId, provider)`.
