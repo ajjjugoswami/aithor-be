@@ -243,7 +243,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
     const User = require('../models/User');
     
     // Get all users
-    const users = await User.find({}, 'email name _id picture');
+    const users = await User.find({}, 'email name _id picture isAdmin');
     
     // Get all API keys with user info
     const apiKeys = await APIKey.find({})
@@ -261,6 +261,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
         email: user.email,
         name: user.name,
         picture: user.picture,
+        isAdmin: user.isAdmin,
         apiKeys: userKeys.map(key => ({
           _id: key._id,
           provider: key.provider,
