@@ -82,6 +82,10 @@ router.post('/', authenticateToken, async (req, res) => {
     res.json(apiKey);
   } catch (error) {
     console.error('Error saving API key:', error);
+    // Show more specific error for MongoDB duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Duplicate key error. This may be due to an old database index. Please run the migration script in README.md.' });
+    }
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -324,6 +328,10 @@ router.post('/admin/:userId', authenticateToken, requireAdmin, async (req, res) 
     res.json(apiKey);
   } catch (error) {
     console.error('Error saving API key for user:', error);
+    // Show more specific error for MongoDB duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Duplicate key error. This may be due to an old database index. Please run the migration script in README.md.' });
+    }
     res.status(500).json({ error: 'Server error' });
   }
 });

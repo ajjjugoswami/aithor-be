@@ -4,7 +4,26 @@
 
 If you were previously prevented from saving multiple API keys per provider, your MongoDB may have an index that enforces uniqueness on `(userId, provider)`.
 
-To drop the old index and create the recommended indexes run the following in a mongo shell or using `mongosh` connected to your database:
+### Automated Migration (Recommended)
+
+Run the automated migration script:
+
+```bash
+cd aithor-be
+node migrate-indexes.js
+```
+
+This script will:
+- Connect to your MongoDB database
+- Check for the old unique index on `{userId, provider}`
+- Drop it if it exists
+- Create the correct indexes:
+  - Non-unique index on `{userId, provider}` for query performance
+  - Unique index on `{userId, key}` to prevent duplicate key values
+
+### Manual Migration
+
+If you prefer to run the commands manually in a mongo shell or using `mongosh`:
 
 ```js
 // Connect to your DB then run:
