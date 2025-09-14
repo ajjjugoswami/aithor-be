@@ -243,11 +243,11 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
     const User = require('../models/User');
     
     // Get all users
-    const users = await User.find({}, 'email name _id');
+    const users = await User.find({}, 'email name _id picture');
     
     // Get all API keys with user info
     const apiKeys = await APIKey.find({})
-      .populate('userId', 'email name')
+      .populate('userId', 'email name picture')
       .sort({ createdAt: -1 });
     
     // Group keys by user
@@ -260,6 +260,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
         _id: user._id,
         email: user.email,
         name: user.name,
+        picture: user.picture,
         apiKeys: userKeys.map(key => ({
           _id: key._id,
           provider: key.provider,
