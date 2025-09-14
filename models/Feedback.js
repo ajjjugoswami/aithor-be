@@ -16,20 +16,6 @@ const feedbackSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true
-  },
-  source: {
-    type: String,
-    enum: ['landing', 'app'],
-    default: 'app'
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: false // Optional - for authenticated users
-  },
-  isRead: {
-    type: Boolean,
-    default: false
   }
 }, {
   timestamps: true
@@ -37,6 +23,5 @@ const feedbackSchema = new mongoose.Schema({
 
 // Index for efficient queries
 feedbackSchema.index({ createdAt: -1 });
-feedbackSchema.index({ isRead: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Feedback', feedbackSchema);
