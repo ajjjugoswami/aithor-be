@@ -23,6 +23,14 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Middleware to check if user is admin
+const requireAdmin = (req, res, next) => {
+  if (req.user.email !== 'goswamiajay526@gmail.com') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
 // Get API keys for the authenticated user
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -144,6 +152,188 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
     // Unset all defaults for this model
     await APIKey.updateMany(
       { userId: req.user.userId, modelId: apiKey.modelId },
+      { isDefault: false }
+    );
+
+    // Set this key as default
+    const updatedKey = await APIKey.findByIdAndUpdate(
+      keyId,
+      { isDefault: true },
+      { new: true }
+    );
+
+    res.json(updatedKey);
+  } catch (error) {
+    console.error('Error setting active API key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ADMIN ROUTES - Only accessible to admin user
+
+// Get all users and their API keys (admin only)
+router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    
+    // Get all users
+    const users = await User.find({}, 'email name _id');
+    
+    // Get all API keys with user info
+    const apiKeys = await APIKey.find({})
+      .populate('userId', 'email name')
+      .sort({ createdAt: -1 });
+    
+    // Group keys by user
+    const usersWithKeys = users.map(user => {
+      const userKeys = apiKeys.filter(key => 
+        key.userId._id.toString() === user._id.toString()
+      );
+      
+      return {
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        apiKeys: userKeys.map(key => ({
+          _id: key._id,
+          modelId: key.modelId,
+          name: key.name,
+          isActive: key.isActive,
+          isDefault: key.isDefault,
+          lastUsed: key.lastUsed,
+          usageCount: key.usageCount,
+          createdAt: key.createdAt,
+          updatedAt: key.updatedAt
+        }))
+      };
+    });
+    
+    res.json(usersWithKeys);
+  } catch (error) {
+    console.error('Error fetching all users and keys:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Create API key for any user (admin only)
+router.post('/admin/:userId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { modelId, key, name, isDefault = false } = req.body;
+
+    if (!modelId || !key || !name) {
+      return res.status(400).json({ error: 'modelId, key, and name are required' });
+    }
+
+    // Check if user exists
+    const User = require('../models/User');
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Find existing key for this user and model
+    let apiKey = await APIKey.findOne({ userId, modelId });
+
+    if (apiKey) {
+      // Update existing
+      apiKey.key = key;
+      apiKey.name = name;
+      apiKey.isDefault = isDefault;
+      await apiKey.save();
+    } else {
+      // Create new
+      apiKey = new APIKey({
+        userId,
+        modelId,
+        key,
+        name,
+        isDefault
+      });
+      await apiKey.save();
+    }
+
+    res.json(apiKey);
+  } catch (error) {
+    console.error('Error saving API key for user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update API key for any user (admin only)
+router.put('/admin/:userId/:keyId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, keyId } = req.params;
+    const { name, isDefault, key } = req.body;
+
+    // If setting as default, unset all other defaults for this model
+    if (isDefault) {
+      const apiKey = await APIKey.findById(keyId);
+      if (apiKey) {
+        await APIKey.updateMany(
+          { userId, modelId: apiKey.modelId },
+          { isDefault: false }
+        );
+      }
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (isDefault !== undefined) updateData.isDefault = isDefault;
+    if (key !== undefined) updateData.key = key;
+
+    const updatedKey = await APIKey.findOneAndUpdate(
+      { _id: keyId, userId },
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    res.json(updatedKey);
+  } catch (error) {
+    console.error('Error updating API key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete API key for any user (admin only)
+router.delete('/admin/:userId/:keyId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, keyId } = req.params;
+    
+    const deletedKey = await APIKey.findOneAndDelete({ 
+      _id: keyId, 
+      userId 
+    });
+    
+    if (!deletedKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+    
+    res.json({ message: 'API key deleted' });
+  } catch (error) {
+    console.error('Error deleting API key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Set active API key for any user (admin only)
+router.patch('/admin/:userId/:keyId/active', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, keyId } = req.params;
+    
+    // Find the key to get the modelId
+    const apiKey = await APIKey.findById(keyId);
+    if (!apiKey || apiKey.userId.toString() !== userId) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    // Unset all defaults for this model
+    await APIKey.updateMany(
+      { userId, modelId: apiKey.modelId },
       { isDefault: false }
     );
 
