@@ -37,7 +37,10 @@ const apiKeySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index to ensure unique modelId per user
-apiKeySchema.index({ userId: 1, modelId: 1 }, { unique: true });
+// Remove unique constraint - allow multiple keys per model per user
+// apiKeySchema.index({ userId: 1, modelId: 1 }, { unique: true });
+
+// Add index for better query performance
+apiKeySchema.index({ userId: 1, modelId: 1 });
 
 module.exports = mongoose.model('APIKey', apiKeySchema);

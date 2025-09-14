@@ -42,7 +42,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Save or update an API key
+// Save a new API key (always creates new, doesn't update existing)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { modelId, key, name, isDefault = false } = req.body;
@@ -51,30 +51,91 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'modelId, key, and name are required' });
     }
 
-    // Find existing key for this user and model
-    let apiKey = await APIKey.findOne({ userId: req.user.userId, modelId });
+    // Check if this is a duplicate key value for the same user
+    const existingKey = await APIKey.findOne({
+      userId: req.user.userId,
+      key: key
+    });
 
-    if (apiKey) {
-      // Update existing
-      apiKey.key = key;
-      apiKey.name = name;
-      apiKey.isDefault = isDefault;
-      await apiKey.save();
-    } else {
-      // Create new
-      apiKey = new APIKey({
-        userId: req.user.userId,
-        modelId,
-        key,
-        name,
-        isDefault
-      });
-      await apiKey.save();
+    if (existingKey) {
+      return res.status(400).json({ error: 'This API key already exists' });
     }
 
+    // If setting as default, unset other defaults for this model
+    if (isDefault) {
+      await APIKey.updateMany(
+        { userId: req.user.userId, modelId, isDefault: true },
+        { isDefault: false }
+      );
+    }
+
+    // Create new API key
+    const apiKey = new APIKey({
+      userId: req.user.userId,
+      modelId,
+      key,
+      name,
+      isDefault
+    });
+
+    await apiKey.save();
     res.json(apiKey);
   } catch (error) {
     console.error('Error saving API key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update an existing API key by ID
+router.put('/:keyId', authenticateToken, async (req, res) => {
+  try {
+    const { keyId } = req.params;
+    const { modelId, key, name, isDefault = false } = req.body;
+
+    if (!key || !name) {
+      return res.status(400).json({ error: 'key and name are required' });
+    }
+
+    const apiKey = await APIKey.findOne({
+      _id: keyId,
+      userId: req.user.userId
+    });
+
+    if (!apiKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    // Check if updating to a duplicate key value
+    if (key !== apiKey.key) {
+      const existingKey = await APIKey.findOne({
+        userId: req.user.userId,
+        key: key,
+        _id: { $ne: keyId }
+      });
+
+      if (existingKey) {
+        return res.status(400).json({ error: 'This API key already exists' });
+      }
+    }
+
+    // If setting as default, unset other defaults for this model
+    if (isDefault && !apiKey.isDefault) {
+      await APIKey.updateMany(
+        { userId: req.user.userId, modelId: apiKey.modelId, isDefault: true },
+        { isDefault: false }
+      );
+    }
+
+    // Update the key
+    apiKey.key = key;
+    apiKey.name = name;
+    apiKey.isDefault = isDefault;
+    if (modelId) apiKey.modelId = modelId; // Allow model change if provided
+
+    await apiKey.save();
+    res.json(apiKey);
+  } catch (error) {
+    console.error('Error updating API key:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -215,7 +276,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Create API key for any user (admin only)
+// Create API key for any user (admin only) - supports multiple keys per model
 router.post('/admin/:userId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -232,27 +293,34 @@ router.post('/admin/:userId', authenticateToken, requireAdmin, async (req, res) 
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Find existing key for this user and model
-    let apiKey = await APIKey.findOne({ userId, modelId });
+    // Check if this is a duplicate key value
+    const existingKey = await APIKey.findOne({
+      userId,
+      key: key
+    });
 
-    if (apiKey) {
-      // Update existing
-      apiKey.key = key;
-      apiKey.name = name;
-      apiKey.isDefault = isDefault;
-      await apiKey.save();
-    } else {
-      // Create new
-      apiKey = new APIKey({
-        userId,
-        modelId,
-        key,
-        name,
-        isDefault
-      });
-      await apiKey.save();
+    if (existingKey) {
+      return res.status(400).json({ error: 'This API key already exists' });
     }
 
+    // If setting as default, unset other defaults for this model
+    if (isDefault) {
+      await APIKey.updateMany(
+        { userId, modelId, isDefault: true },
+        { isDefault: false }
+      );
+    }
+
+    // Create new API key (always create new, don't update existing)
+    const apiKey = new APIKey({
+      userId,
+      modelId,
+      key,
+      name,
+      isDefault
+    });
+
+    await apiKey.save();
     res.json(apiKey);
   } catch (error) {
     console.error('Error saving API key for user:', error);
