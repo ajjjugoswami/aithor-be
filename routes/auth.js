@@ -7,6 +7,31 @@ const router = express.Router();
 // JWT Secret (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 
+// Middleware to check if user is admin
+const requireAdmin = (req, res, next) => {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
 // Signup
 router.post('/signup', async (req, res) => {
   try {
@@ -33,7 +58,7 @@ router.post('/signup', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: newUser._id, email: newUser.email },
+      { userId: newUser._id, email: newUser.email, isAdmin: newUser.isAdmin || false },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -68,14 +93,14 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
+      { userId: user._id, email: user.email, isAdmin: user.isAdmin || false },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     res.json({
       token,
-      user: { id: user._id, email: user.email, isVerified: user.isVerified }
+      user: { id: user._id, email: user.email, isVerified: user.isVerified, isAdmin: user.isAdmin }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -84,7 +109,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Verify token
-router.get('/verify', (req, res) => {
+router.get('/verify', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
 
@@ -93,7 +118,17 @@ router.get('/verify', (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    res.json({ valid: true, user: { id: decoded.userId, email: decoded.email } });
+    const user = await User.findById(decoded.userId);
+    res.json({ 
+      valid: true, 
+      user: { 
+        id: user._id, 
+        email: user.email, 
+        isAdmin: user.isAdmin,
+        name: user.name,
+        picture: user.picture
+      } 
+    });
   } catch (error) {
     res.status(401).json({ valid: false, error: 'Invalid token' });
   }
@@ -130,17 +165,68 @@ router.post('/google-auth', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
+      { userId: user._id, email: user.email, isAdmin: user.isAdmin || false },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     res.json({
       token,
-      user: { id: user._id, email: user.email, name: user.name, picture: user.picture }
+      user: { id: user._id, email: user.email, name: user.name, picture: user.picture, isAdmin: user.isAdmin }
     });
   } catch (error) {
     console.error('Google auth error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+// Grant admin access to a user
+router.post('/grant-admin/:userId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Find and update user
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { isAdmin: true },
+      { new: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ 
+      message: 'Admin access granted successfully',
+      user: { id: user._id, email: user.email, isAdmin: user.isAdmin }
+    });
+  } catch (error) {
+    console.error('Grant admin error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Revoke admin access from a user
+router.post('/revoke-admin/:userId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Find and update user
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { isAdmin: false },
+      { new: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ 
+      message: 'Admin access revoked successfully',
+      user: { id: user._id, email: user.email, isAdmin: user.isAdmin }
+    });
+  } catch (error) {
+    console.error('Revoke admin error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
