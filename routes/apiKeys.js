@@ -241,21 +241,33 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
 router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const User = require('../models/User');
-    
-    // Get all users
-    const users = await User.find({}, 'email name _id picture isAdmin');
-    
+    const { search } = req.query;
+
+    // Build search query
+    let userQuery = {};
+    if (search) {
+      userQuery = {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      };
+    }
+
+    // Get users (filtered by search if provided)
+    const users = await User.find(userQuery, 'email name _id picture isAdmin');
+
     // Get all API keys with user info
     const apiKeys = await APIKey.find({})
       .populate('userId', 'email name picture')
       .sort({ createdAt: -1 });
-    
+
     // Group keys by user
     const usersWithKeys = users.map(user => {
-      const userKeys = apiKeys.filter(key => 
+      const userKeys = apiKeys.filter(key =>
         key.userId._id.toString() === user._id.toString()
       );
-      
+
       return {
         _id: user._id,
         email: user.email,
@@ -275,7 +287,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
         }))
       };
     });
-    
+
     res.json(usersWithKeys);
   } catch (error) {
     console.error('Error fetching all users and keys:', error);
