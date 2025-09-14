@@ -295,7 +295,7 @@ router.post('/admin/:userId', authenticateToken, requireAdmin, async (req, res) 
 
     // Check if this is a duplicate key value
     const existingKey = await APIKey.findOne({
-      userId,
+      userId: userId,
       key: key
     });
 

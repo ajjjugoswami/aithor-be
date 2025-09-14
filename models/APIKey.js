@@ -37,7 +37,11 @@ const apiKeySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Add index for better query performance
+// Indexes:
+// - Keep a non-unique index for queries by provider per user (performance)
+// - Add a UNIQUE index on (userId, key) to prevent storing the same raw key twice
+//   for the same user while allowing multiple keys for the same provider.
 apiKeySchema.index({ userId: 1, provider: 1 });
+apiKeySchema.index({ userId: 1, key: 1 }, { unique: true });
 
 module.exports = mongoose.model('APIKey', apiKeySchema);
