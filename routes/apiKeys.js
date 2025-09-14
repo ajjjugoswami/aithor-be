@@ -51,14 +51,15 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'provider, key, and name are required' });
     }
 
-    // Check if this is a duplicate key value for the same user
+    // Check if this is a duplicate key value for the same user and provider
     const existingKey = await APIKey.findOne({
       userId: req.user.userId,
+      provider: provider,
       key: key
     });
 
     if (existingKey) {
-      return res.status(400).json({ error: 'This API key already exists' });
+      return res.status(400).json({ error: 'This API key already exists for this provider' });
     }
 
     // If setting as default, unset other defaults for this provider
