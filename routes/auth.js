@@ -1,12 +1,244 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
-const { sendVerificationOTP, verifyOTP } = require('../utils/otpService');
+const { sendVerificationOTP, verifyOTP, sendOTPEmail } = require('../utils/otpService');
 const router = express.Router();
 
 // JWT Secret (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
+
+/**
+ * Send password reset email using Brevo
+ * @param {string} email - Recipient email
+ * @param {string} resetUrl - Password reset URL
+ * @returns {Promise<object>} Send result
+ */
+const sendPasswordResetEmail = async (email, resetUrl) => {
+  try {
+    const SibApiV3Sdk = require('sib-api-v3-sdk');
+
+    // Configure Brevo API
+    const defaultClient = SibApiV3Sdk.ApiClient.instance;
+    const apiKey = defaultClient.authentications['api-key'];
+    apiKey.apiKey = process.env.BREVO_API_KEY;
+
+    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+
+    sendSmtpEmail.subject = "Password Reset Request - AIthor";
+    sendSmtpEmail.htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>AIthor Password Reset</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #2563eb; margin: 0;">AIthor AI</h1>
+              <p style="color: #6b7280; margin: 5px 0;">Password Reset</p>
+            </div>
+
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 30px;">
+              <h2 style="color: #1f2937; margin: 0 0 20px 0; text-align: center;">Reset Your Password</h2>
+
+              <p style="color: #6b7280; margin: 20px 0;">
+                You requested a password reset for your AIthor account. Click the button below to reset your password:
+              </p>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetUrl}" style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+              </div>
+
+              <p style="color: #6b7280; margin: 20px 0; font-size: 14px;">
+                This link will expire in <strong>1 hour</strong> for security reasons.
+              </p>
+
+              <p style="color: #6b7280; margin: 20px 0; font-size: 14px;">
+                If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
+              </p>
+
+              <p style="color: #dc2626; margin: 20px 0; font-size: 14px; font-weight: bold;">
+                ⚠️ Never share this email or the reset link with anyone.
+              </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+              <p style="color: #9ca3af; font-size: 14px; margin: 0;">
+                This is an automated message from AIthor AI. Please do not reply to this email.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    sendSmtpEmail.sender = {
+      name: process.env.BREVO_FROM_NAME || 'AIthor AI',
+      email: process.env.BREVO_FROM_EMAIL || 'noreply@aithor.com'
+    };
+    sendSmtpEmail.to = [{ email: email }];
+    sendSmtpEmail.replyTo = {
+      name: process.env.BREVO_FROM_NAME || 'AIthor AI',
+      email: process.env.BREVO_FROM_EMAIL || 'noreply@aithor.com'
+    };
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    return { success: true, messageId: result.messageId };
+
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
+
+    let errorMessage = 'Failed to send password reset email';
+    if (error.message) {
+      if (error.message.includes('api-key')) {
+        errorMessage = 'Email service not configured. Please check API key.';
+      } else if (error.message.includes('sender')) {
+        errorMessage = 'Sender email not verified. Please verify sender email in Brevo dashboard.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+};
+
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Request password reset
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Password reset email sent
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = Date.now() + 3600000; // 1 hour
+
+    // Save reset token to user
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpiry;
+    await user.save();
+
+    // Send reset email using Brevo
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
+    const emailResult = await sendPasswordResetEmail(email, resetUrl);
+
+    if (!emailResult.success) {
+      return res.status(500).json({ error: emailResult.error || 'Failed to send reset email' });
+    }
+
+    res.json({ message: 'Password reset email sent successfully' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: Reset password with token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid or expired token
+ *       500:
+ *         description: Server error
+ */
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Update user password and clear reset token
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 /**
  * @swagger
