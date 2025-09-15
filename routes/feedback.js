@@ -172,4 +172,49 @@ router.get('/admin', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/feedback/admin/{id}:
+ *   delete:
+ *     summary: Delete feedback by ID (Admin Only)
+ *     description: Delete a specific feedback item by ID - requires admin authentication
+ *     tags: [Feedback]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Feedback ID
+ *     responses:
+ *       200:
+ *         description: Feedback deleted successfully
+ *       401:
+ *         description: Unauthorized - No token provided or invalid token
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       404:
+ *         description: Feedback not found
+ *       500:
+ *         description: Server error
+ */
+router.delete('/admin/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deletedFeedback = await Feedback.findByIdAndDelete(id);
+
+    if (!deletedFeedback) {
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+
+    res.json({ message: 'Feedback deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting feedback:', error);
+    res.status(500).json({ error: 'Failed to delete feedback' });
+  }
+});
+
 module.exports = router;
