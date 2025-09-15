@@ -70,11 +70,12 @@ router.post('/send', authenticateToken, async (req, res) => {
     }
 
     // Determine provider from modelId
-    const provider = modelId.includes('gpt') || modelId.includes('chatgpt') ? 'openai' : 
-                     modelId.includes('gemini') ? 'gemini' :
-                     modelId.includes('claude') ? 'claude' :
-                     modelId.includes('deepseek') ? 'deepseek' :
-                     modelId.includes('perplexity') || modelId.includes('sonar') ? 'perplexity' : 'unknown';
+    const lowerModelId = modelId.toLowerCase();
+    const provider = lowerModelId.includes('gpt') || lowerModelId.includes('chatgpt') ? 'openai' : 
+                     lowerModelId.includes('gemini') ? 'gemini' :
+                     lowerModelId.includes('claude') ? 'claude' :
+                     lowerModelId.includes('deepseek') ? 'deepseek' :
+                     lowerModelId.includes('perplexity') || lowerModelId.includes('sonar') ? 'perplexity' : 'unknown';
 
     // Check if user has their own API key for this provider
     const { APIKey } = require('../models/APIKey');
@@ -119,8 +120,19 @@ router.post('/send', authenticateToken, async (req, res) => {
     const aiResponse = await callAIService(messages, modelId, apiKey, provider);
 
     // Increment quota if using app key
+    let usageInfo = null;
     if (usingAppKey) {
       await incrementQuota(req.user.userId, provider);
+      // Get updated quota info
+      const { UserQuota } = require('../models/APIKey');
+      const userQuota = await UserQuota.findOne({ userId: req.user.userId, provider });
+      if (userQuota) {
+        usageInfo = {
+          provider,
+          usedCalls: userQuota.usedCalls,
+          maxFreeCalls: userQuota.maxFreeCalls
+        };
+      }
     }
 
     // Update usage count for user key
@@ -129,6 +141,11 @@ router.post('/send', authenticateToken, async (req, res) => {
         $inc: { usageCount: 1 },
         lastUsed: new Date()
       });
+    }
+
+    // Add usage info to response if available
+    if (usageInfo) {
+      aiResponse.usage = usageInfo;
     }
 
     res.json(aiResponse);
@@ -145,14 +162,9 @@ async function callAIService(messages, modelId, apiKey, provider) {
       return await sendToChatGPT(messages, modelId, apiKey);
     } else if (provider === 'gemini') {
       return await sendToGemini(messages, modelId, apiKey);
-    } else if (provider === 'claude') {
-      return await sendToClaude(messages, modelId, apiKey);
-    } else if (provider === 'deepseek') {
-      return await sendToDeepseek(messages, modelId, apiKey);
-    } else if (provider === 'perplexity') {
-      return await sendToPerplexity(messages, modelId, apiKey);
     } else {
-      return { success: false, error: 'Unsupported provider' };
+      // For other providers, frontend should handle the API call directly
+      return { success: false, error: 'This provider must be called from frontend. Please add your API key in settings.' };
     }
   } catch (error) {
     console.error('AI Service Error:', error);
@@ -382,188 +394,6 @@ async function sendToGemini(messages, modelId, apiKey) {
     };
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
-  }
-}
-
-// Claude API Integration (Anthropic)
-async function sendToClaude(messages, modelId, apiKey) {
-  try {
-    // Map model IDs to actual Claude model names
-    let actualModel = "claude-3-haiku-20240307"; // Default to free tier
-
-    switch (modelId) {
-      case "claude-3-haiku":
-        actualModel = "claude-3-haiku-20240307";
-        break;
-      case "claude-3-sonnet":
-        actualModel = "claude-3-sonnet-20240229";
-        break;
-      case "claude-3-opus":
-        actualModel = "claude-3-opus-20240229";
-        break;
-      default:
-        // Fallback for backward compatibility
-        actualModel = "claude-3-haiku-20240307";
-        break;
-    }
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: actualModel,
-        max_tokens: 1000,
-        messages: messages.filter((msg) => msg.role !== "system"),
-        system: messages.find((msg) => msg.role === "system")?.content,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return {
-        success: false,
-        error:
-          errorData.error?.message ||
-          `HTTP ${response.status}: ${response.statusText}`,
-      };
-    }
-
-    const data = await response.json();
-    const assistantMessage = data.content?.[0]?.text;
-
-    if (!assistantMessage) {
-      return { success: false, error: "No response from Claude" };
-    }
-
-    return { success: true, message: assistantMessage };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
-  }
-}
-
-// Deepseek API Integration
-async function sendToDeepseek(messages, modelId, apiKey) {
-  try {
-    // Map model IDs to actual DeepSeek model names
-    let actualModel = "deepseek-chat"; // Default to free tier
-
-    switch (modelId) {
-      case "deepseek-chat":
-        actualModel = "deepseek-chat";
-        break;
-      case "deepseek-coder":
-        actualModel = "deepseek-coder";
-        break;
-      default:
-        actualModel = "deepseek-chat";
-        break;
-    }
-
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: actualModel,
-        messages: messages,
-        max_tokens: 1000,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return {
-        success: false,
-        error: `DeepSeek Error: ${
-          errorData.error?.message ||
-          `HTTP ${response.status}: ${response.statusText}`
-        }`,
-      };
-    }
-
-    const data = await response.json();
-    const assistantMessage = data.choices?.[0]?.message?.content;
-
-    if (!assistantMessage) {
-      return { success: false, error: "No response from DeepSeek" };
-    }
-
-    return { success: true, message: assistantMessage };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
-  }
-}
-
-// Perplexity API Integration
-async function sendToPerplexity(messages, modelId, apiKey) {
-  try {
-    // Map model IDs to actual Perplexity model names
-    let actualModel = "sonar"; // Default
-
-    switch (modelId) {
-      case "perplexity-sonar":
-        actualModel = "sonar";
-        break;
-      case "perplexity-sonar-pro":
-        actualModel = "sonar-pro";
-        break;
-      default:
-        actualModel = "sonar";
-        break;
-    }
-
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: actualModel,
-        messages: messages,
-        max_tokens: 1000,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return {
-        success: false,
-        error: `Perplexity Error: ${
-          errorData.error?.message ||
-          `HTTP ${response.status}: ${response.statusText}`
-        }`,
-      };
-    }
-
-    const data = await response.json();
-    const assistantMessage = data.choices?.[0]?.message?.content;
-
-    if (!assistantMessage) {
-      return { success: false, error: "No response from Perplexity" };
-    }
-
-    return { success: true, message: assistantMessage };
-  } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred",
