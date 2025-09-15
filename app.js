@@ -43,6 +43,13 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Set referrer policy to allow cross-origin requests
+app.use((req, res, next) => {
+  res.setHeader('Referrer-Policy', 'no-referrer-when-downgrade');
+  next();
+});
+
 app.use(express.json());
 
 // Swagger configuration

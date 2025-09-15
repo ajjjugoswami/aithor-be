@@ -758,11 +758,15 @@ router.post('/admin/app-key', authenticateToken, requireAdmin, async (req, res) 
   try {
     const { provider, key } = req.body;
 
+    console.log('Received app key request:', { provider, key: key ? '***' + key.slice(-4) : 'undefined' });
+
     if (!provider || !key) {
+      console.log('Missing provider or key:', { provider: !!provider, key: !!key });
       return res.status(400).json({ error: 'Provider and key are required' });
     }
 
     if (!['openai', 'gemini'].includes(provider)) {
+      console.log('Invalid provider:', provider);
       return res.status(400).json({ error: 'Invalid provider. Must be openai or gemini' });
     }
 
