@@ -149,8 +149,7 @@ const sendOTPEmail = async (email, otp) => {
  */
 const sendVerificationOTP = async (email) => {
   try {
-    // Generate OTP
-    const otp = generateOTP();
+     const otp = generateOTP();
 
     // Store OTP
     storeOTP(email, otp);
