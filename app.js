@@ -143,6 +143,9 @@ app.use('/api/auth', require('./routes/auth'));
 // API Keys routes
 app.use('/api/api-keys', require('./routes/apiKeys'));
 
+// Admin routes
+app.use('/api/admin', require('./routes/admin'));
+
 // Feedback routes
 app.use('/api/feedback', require('./routes/feedback'));
 
