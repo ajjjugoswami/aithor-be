@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Feedback = require('../models/Feedback');
-const { authenticateToken, requireAdmin } = require('./auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 /**
  * @swagger

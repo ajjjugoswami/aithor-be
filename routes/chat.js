@@ -1,26 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { getAppKey, checkQuota, incrementQuota } = require('./apiKeys');
+const { getAppKey, checkQuota, incrementQuota } = require('../utils/quotaUtils');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
-
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
 
 /**
  * @swagger

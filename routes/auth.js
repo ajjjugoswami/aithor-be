@@ -873,5 +873,3 @@ router.delete('/admin/users/:userId', authenticateToken, requireAdmin, async (re
 });
 
 module.exports = router;
-module.exports.authenticateToken = authenticateToken;
-module.exports.requireAdmin = requireAdmin;

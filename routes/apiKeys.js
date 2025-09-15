@@ -1,6 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { APIKey, UserQuota } = require('../models/APIKey');
+const { getAppKey, checkQuota, incrementQuota } = require('../utils/quotaUtils');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
@@ -91,64 +93,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
  *             $ref: '#/components/schemas/APIKey'
  *           description: Array of user's API keys
  */
-
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
-
-// Middleware to check if user is admin
-const requireAdmin = (req, res, next) => {
-  if (!req.user.isAdmin) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
-
-// Utility function to get app key for a provider
-const getAppKey = async (provider) => {
-  const keyDoc = await APIKey.findOne({ provider, isAppKey: true, isActive: true });
-  return keyDoc ? keyDoc.key : null;
-};
-
-// Utility function to check if user has quota remaining (only for free providers)
-const checkQuota = async (userId, provider) => {
-  // Only OpenAI and Gemini have free quotas
-  if (provider !== 'openai' && provider !== 'gemini') {
-    return false; // No quota system for other providers
-  }
-
-  let quota = await UserQuota.findOne({ userId, provider });
-  if (!quota) {
-    quota = new UserQuota({ userId, provider });
-    await quota.save();
-  }
-  return quota.usedCalls < quota.maxFreeCalls;
-};
-
-// Utility function to increment user's quota usage (only for free providers)
-const incrementQuota = async (userId, provider) => {
-  // Only increment quota for free providers
-  if (provider === 'openai' || provider === 'gemini') {
-    await UserQuota.findOneAndUpdate(
-      { userId, provider },
-      { $inc: { usedCalls: 1 } },
-      { upsert: true }
-    );
-  }
-};
 
 /**
  * @swagger
@@ -960,9 +904,4 @@ router.post('/admin/reset-quota/:userId/:provider', authenticateToken, requireAd
   }
 });
 
-module.exports = {
-  router,
-  getAppKey,
-  checkQuota,
-  incrementQuota
-};
+module.exports = router;
