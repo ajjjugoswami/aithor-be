@@ -397,6 +397,33 @@ router.post('/revoke-admin/:userId', authenticateToken, requireAdmin, async (req
   }
 });
 
+// Delete user (admin only)
+router.delete('/admin/users/:userId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Prevent admin from deleting themselves
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    // Find and delete the user
+    const user = await User.findByIdAndDelete(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ 
+      message: 'User deleted successfully',
+      user: { id: user._id, email: user.email, name: user.name }
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
