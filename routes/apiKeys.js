@@ -428,6 +428,21 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Number of users per page
+ *       - in: query
  *         name: name
  *         schema:
  *           type: string
@@ -448,9 +463,27 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/UserWithKeys'
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/UserWithKeys'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     currentPage:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalUsers:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  *       401:
  *         description: Unauthorized - Invalid or missing token
  *         content:
@@ -474,7 +507,12 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
 router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const User = require('../models/User');
-    const { search, name, email } = req.query;
+    const { search, name, email, page = 1, limit = 10 } = req.query;
+
+    // Convert to numbers and set defaults
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
 
     // Build search query
     let userQuery = {};
@@ -500,8 +538,14 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
       }
     }
 
-    // Get users (filtered by search if provided)
-    const users = await User.find(userQuery, 'email name _id picture isAdmin');
+    // Get users count for pagination
+    const totalUsers = await User.countDocuments(userQuery);
+
+    // Get users (filtered by search if provided) with pagination
+    const users = await User.find(userQuery, 'email name _id picture isAdmin')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
 
     // Get all API keys with user info
     const apiKeys = await APIKey.find({})
@@ -534,7 +578,20 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
       };
     });
 
-    res.json(usersWithKeys);
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalUsers / limitNum);
+
+    res.json({
+      users: usersWithKeys,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalUsers,
+        limit: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching all users and keys:', error);
     res.status(500).json({ error: 'Server error' });

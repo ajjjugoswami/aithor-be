@@ -398,3 +398,5 @@ router.post('/revoke-admin/:userId', authenticateToken, requireAdmin, async (req
 });
 
 module.exports = router;
+module.exports.authenticateToken = authenticateToken;
+module.exports.requireAdmin = requireAdmin;

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Feedback = require('../models/Feedback');
+const { authenticateToken, requireAdmin } = require('./auth');
 
 /**
  * @swagger
@@ -63,9 +64,27 @@ router.post('/', async (req, res) => {
  * @swagger
  * /api/feedback/admin:
  *   get:
- *     summary: Get all feedback for admin
- *     description: Retrieve all feedback for admin panel
+ *     summary: Get all feedback for admin (Admin Only)
+ *     description: Retrieve all feedback for admin panel - requires admin authentication
  *     tags: [Feedback]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Number of feedback items per page
  *     responses:
  *       200:
  *         description: Feedback retrieved successfully
@@ -93,15 +112,60 @@ router.post('/', async (req, res) => {
  *                       updatedAt:
  *                         type: string
  *                         format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     currentPage:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalFeedback:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
+ *       401:
+ *         description: Unauthorized - No token provided or invalid token
+ *       403:
+ *         description: Forbidden - Admin access required
  *       500:
  *         description: Server error
  */
-router.get('/admin', async (req, res) => {
+router.get('/admin', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const feedback = await Feedback.find({})
-      .sort({ createdAt: -1 });
+    const { page = 1, limit = 10 } = req.query;
 
-    res.json({ feedback });
+    // Convert to numbers and set defaults
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get total count for pagination
+    const totalFeedback = await Feedback.countDocuments({});
+
+    // Get feedback with pagination
+    const feedback = await Feedback.find({})
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalFeedback / limitNum);
+
+    res.json({
+      feedback,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalFeedback,
+        limit: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching feedback:', error);
     res.status(500).json({ error: 'Failed to fetch feedback' });
