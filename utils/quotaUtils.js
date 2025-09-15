@@ -1,8 +1,9 @@
 const { APIKey, UserQuota } = require('../models/APIKey');
+const AppKey = require('../models/AppKey');
 
 // Utility function to get app key for a provider
 const getAppKey = async (provider) => {
-  const keyDoc = await APIKey.findOne({ provider, isAppKey: true, isActive: true });
+  const keyDoc = await AppKey.findOne({ provider, isActive: true });
   return keyDoc ? keyDoc.key : null;
 };
 
@@ -29,6 +30,11 @@ const incrementQuota = async (userId, provider) => {
       { userId, provider },
       { $inc: { usedCalls: 1 } },
       { upsert: true }
+    );
+    // Also increment app key usage count
+    await AppKey.findOneAndUpdate(
+      { provider },
+      { $inc: { usageCount: 1 }, $set: { lastUsed: new Date() } }
     );
   }
 };

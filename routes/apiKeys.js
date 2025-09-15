@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { APIKey, UserQuota } = require('../models/APIKey');
+const AppKey = require('../models/AppKey');
 const { getAppKey, checkQuota, incrementQuota } = require('../utils/quotaUtils');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
@@ -756,9 +757,9 @@ router.patch('/admin/:userId/:keyId/active', authenticateToken, requireAdmin, as
  */
 router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
-    const { provider, key, name } = req.body;
+    const { provider, key } = req.body;
 
-    console.log('Received app key request:', { provider, key: key ? '***' + key.slice(-4) : 'undefined', name });
+    console.log('Received app key request:', { provider, key: key ? '***' + key.slice(-4) : 'undefined' });
 
     if (!provider || !key) {
       console.log('Missing provider or key:', { provider: !!provider, key: !!key });
@@ -771,12 +772,11 @@ router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req,
     }
 
     // Check if app key already exists for this provider
-    const existingKey = await APIKey.findOne({ provider, isAppKey: true });
+    const existingKey = await AppKey.findOne({ provider });
 
     if (existingKey) {
       // Update existing key
       existingKey.key = key;
-      existingKey.name = name || existingKey.name;
       existingKey.lastUsed = new Date();
       try {
         await existingKey.save();
@@ -787,11 +787,9 @@ router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req,
       }
     } else {
       // Create new app key
-      const newAppKey = new APIKey({
+      const newAppKey = new AppKey({
         provider,
         key,
-        name: name || `${provider.charAt(0).toUpperCase() + provider.slice(1)} App Key`,
-        isAppKey: true,
         isActive: true
       });
       try {
@@ -828,7 +826,7 @@ router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req,
  */
 router.get('/admin/app-keys', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
-    const appKeys = await APIKey.find({ isAppKey: true }).select('-key');
+    const appKeys = await AppKey.find({}).select('-key');
     res.json(appKeys);
   } catch (error) {
     console.error('Error fetching app keys:', error);
