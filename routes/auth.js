@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { sendVerificationOTP, verifyOTP } = require('../utils/otpService');
 const router = express.Router();
 
 // JWT Secret (in production, use environment variable)
@@ -297,6 +298,123 @@ router.get('/verify', async (req, res) => {
     });
   } catch (error) {
     res.status(401).json({ valid: false, error: 'Invalid token' });
+  }
+});
+
+// Send OTP for email verification
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    const result = await sendVerificationOTP(email);
+
+    if (result.success) {
+      res.json({
+        message: result.message,
+        email: email
+      });
+    } else {
+      res.status(500).json({ error: result.message });
+    }
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Verify OTP
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP are required' });
+    }
+
+    const result = verifyOTP(email, otp);
+
+    if (result.isValid) {
+      res.json({
+        message: result.message,
+        verified: true
+      });
+    } else {
+      res.status(400).json({
+        error: result.message,
+        verified: false
+      });
+    }
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Signup with OTP verification
+router.post('/signup-with-otp', async (req, res) => {
+  try {
+    const { email, password, name, otp } = req.body;
+
+    if (!email || !password || !otp) {
+      return res.status(400).json({ error: 'Email, password, and OTP are required' });
+    }
+
+    // Verify OTP first
+    const otpResult = verifyOTP(email, otp);
+    if (!otpResult.isValid) {
+      return res.status(400).json({ error: otpResult.message });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const newUser = new User({
+      email,
+      password: hashedPassword,
+      name: name || email.split('@')[0],
+      isVerified: true
+    });
+
+    await newUser.save();
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: newUser._id, email: newUser.email, isAdmin: newUser.isAdmin || false },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'User created and verified successfully.',
+      token,
+      user: {
+        id: newUser._id,
+        email: newUser.email,
+        name: newUser.name,
+        isVerified: newUser.isVerified
+      }
+    });
+  } catch (error) {
+    console.error('Signup with OTP error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
