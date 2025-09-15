@@ -518,15 +518,43 @@ router.get('/verify', async (req, res) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId);
-    res.json({ 
-      valid: true, 
-      user: { 
-        id: user._id, 
-        email: user.email, 
+
+    // Get user's quota information for free providers
+    const { UserQuota } = require('../models/APIKey');
+    const openaiQuota = await UserQuota.findOne({ userId: user._id, provider: 'openai' });
+    const geminiQuota = await UserQuota.findOne({ userId: user._id, provider: 'gemini' });
+
+    const quotas = {
+      openai: openaiQuota ? {
+        usedCalls: openaiQuota.usedCalls,
+        maxFreeCalls: openaiQuota.maxFreeCalls,
+        remainingCalls: Math.max(0, openaiQuota.maxFreeCalls - openaiQuota.usedCalls)
+      } : {
+        usedCalls: 0,
+        maxFreeCalls: 10,
+        remainingCalls: 10
+      },
+      gemini: geminiQuota ? {
+        usedCalls: geminiQuota.usedCalls,
+        maxFreeCalls: geminiQuota.maxFreeCalls,
+        remainingCalls: Math.max(0, geminiQuota.maxFreeCalls - geminiQuota.usedCalls)
+      } : {
+        usedCalls: 0,
+        maxFreeCalls: 10,
+        remainingCalls: 10
+      }
+    };
+
+    res.json({
+      valid: true,
+      user: {
+        id: user._id,
+        email: user.email,
         isAdmin: user.isAdmin,
         name: user.name,
         picture: user.picture
-      } 
+      },
+      quotas
     });
   } catch (error) {
     res.status(401).json({ valid: false, error: 'Invalid token' });
