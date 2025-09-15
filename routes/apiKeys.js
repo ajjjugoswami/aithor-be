@@ -776,8 +776,15 @@ router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req,
     if (existingKey) {
       // Update existing key
       existingKey.key = key;
+      existingKey.name = name || existingKey.name;
       existingKey.lastUsed = new Date();
-      await existingKey.save();
+      try {
+        await existingKey.save();
+        console.log('Updated existing app key for', provider);
+      } catch (saveError) {
+        console.error('Error saving existing app key:', saveError);
+        return res.status(500).json({ error: 'Failed to update app key' });
+      }
     } else {
       // Create new app key
       const newAppKey = new APIKey({
@@ -787,7 +794,13 @@ router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req,
         isAppKey: true,
         isActive: true
       });
-      await newAppKey.save();
+      try {
+        await newAppKey.save();
+        console.log('Created new app key for', provider);
+      } catch (saveError) {
+        console.error('Error saving new app key:', saveError);
+        return res.status(500).json({ error: 'Failed to create app key' });
+      }
     }
 
     res.json({ message: 'App key updated successfully' });
