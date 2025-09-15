@@ -546,15 +546,15 @@ router.get('/verify', async (req, res) => {
     };
 
     res.json({
-      valid: true,
-      user: {
-        id: user._id,
-        email: user.email,
-        isAdmin: user.isAdmin,
-        name: user.name,
-        picture: user.picture
-      },
-      quotas
+        valid: true,
+        user: {
+          id: user._id,
+          email: user.email,
+          isAdmin: user.isAdmin,
+          name: user.name,
+          picture: user.picture,
+          quotas
+        }
     });
   } catch (error) {
     res.status(401).json({ valid: false, error: 'Invalid token' });
