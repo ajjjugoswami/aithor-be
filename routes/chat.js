@@ -129,7 +129,16 @@ router.post('/send', authenticateToken, async (req, res) => {
         usageInfo = {
           provider,
           usedCalls: userQuota.usedCalls,
-          maxFreeCalls: userQuota.maxFreeCalls
+          maxFreeCalls: userQuota.maxFreeCalls,
+          remainingCalls: Math.max(0, userQuota.maxFreeCalls - userQuota.usedCalls)
+        };
+      } else {
+        // User hasn't used free quota yet
+        usageInfo = {
+          provider,
+          usedCalls: 0,
+          maxFreeCalls: 10,
+          remainingCalls: 10
         };
       }
     }
@@ -140,6 +149,7 @@ router.post('/send', authenticateToken, async (req, res) => {
       // Update usage info after increment
       if (usageInfo) {
         usageInfo.usedCalls += 1;
+        usageInfo.remainingCalls = Math.max(0, usageInfo.maxFreeCalls - usageInfo.usedCalls);
       }
     }
 
