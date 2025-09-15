@@ -1,10 +1,123 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { UserQuota } = require('../models/APIKey');
+const AppKey = require('../models/AppKey');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
+
+/**
+ * @swagger
+ * /api/admin/app-keys:
+ *   get:
+ *     summary: Get all app-owned API keys (Admin only)
+ *     tags: [Admin App Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of app API keys
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/app-keys', authenticateToken, /* requireAdmin, */ async (req, res) => {
+  try {
+    const appKeys = await AppKey.find({}).select('-key');
+    res.json(appKeys);
+  } catch (error) {
+    console.error('Error fetching app keys:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/app-key:
+ *   post:
+ *     summary: Set app-owned API key for a provider (Admin only)
+ *     tags: [Admin App Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - provider
+ *               - key
+ *             properties:
+ *               provider:
+ *                 type: string
+ *                 enum: [openai, gemini]
+ *               key:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: App key updated successfully
+ *       400:
+ *         description: Invalid request data
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.post('/app-key', authenticateToken, /* requireAdmin, */ async (req, res) => {
+  try {
+    const { provider, key } = req.body;
+
+    console.log('Received app key request:', { provider, key: key ? '***' + key.slice(-4) : 'undefined' });
+
+    if (!provider || !key) {
+      console.log('Missing provider or key:', { provider: !!provider, key: !!key });
+      return res.status(400).json({ error: 'Provider and key are required' });
+    }
+
+    if (!['openai', 'gemini'].includes(provider)) {
+      console.log('Invalid provider:', provider);
+      return res.status(400).json({ error: 'Invalid provider. Must be openai or gemini' });
+    }
+
+    // Check if app key already exists for this provider
+    const existingKey = await AppKey.findOne({ provider });
+
+    if (existingKey) {
+      // Update existing key
+      existingKey.key = key;
+      existingKey.lastUsed = new Date();
+      try {
+        await existingKey.save();
+        console.log('Updated existing app key for', provider);
+      } catch (saveError) {
+        console.error('Error saving existing app key:', saveError);
+        return res.status(500).json({ error: 'Failed to update app key' });
+      }
+    } else {
+      // Create new app key
+      const newAppKey = new AppKey({
+        provider,
+        key,
+        isActive: true
+      });
+      try {
+        await newAppKey.save();
+        console.log('Created new app key for', provider);
+      } catch (saveError) {
+        console.error('Error saving new app key:', saveError);
+        return res.status(500).json({ error: 'Failed to create app key' });
+      }
+    }
+
+    res.json({ message: 'App key updated successfully' });
+  } catch (error) {
+    console.error('Error setting app key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 /**
  * @swagger
