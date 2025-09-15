@@ -159,7 +159,10 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // Send reset email using Brevo
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
+    const frontendUrl = process.env.FRONTEND_URL ||
+                       process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
+                       'https://chat-with-aithor.vercel.app'; // Production fallback
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
     const emailResult = await sendPasswordResetEmail(email, resetUrl);
 
     if (!emailResult.success) {

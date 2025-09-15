@@ -11,20 +11,38 @@ const PORT = process.env.PORT || 8000;
 connectDB();
 
 // Middleware
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:8080',
-    'https://aithor.vercel.app',
-    'https://chat-with-aithor.vercel.app',
-    'https://aithor-be.vercel.app'
-  ],
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:8080',
+      'https://aithor.vercel.app',
+      'https://chat-with-aithor.vercel.app',
+      'https://aithor-be.vercel.app'
+    ];
+
+    // In production, also allow the current domain
+    if (process.env.NODE_ENV === 'production' && process.env.VERCEL_URL) {
+      allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+    }
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Swagger configuration
@@ -38,8 +56,10 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:8000',
-        description: 'Development server',
+        url: process.env.NODE_ENV === 'production'
+          ? 'https://aithor-be.vercel.app'
+          : 'http://localhost:8000',
+        description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server',
       },
     ],
     components: {
@@ -119,19 +139,7 @@ app.get('/swagger.json', (req, res) => {
 });
 
 // Handle preflight requests
-app.options('*', cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:8080',
-    'https://aithor.vercel.app',
-    'https://chat-with-aithor.vercel.app',
-    'https://aithor-be.vercel.app'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.options('*', cors(corsOptions));
 
 // Basic route
 app.get('/', (req, res) => {
