@@ -756,9 +756,9 @@ router.patch('/admin/:userId/:keyId/active', authenticateToken, requireAdmin, as
  */
 router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
-    const { provider, key } = req.body;
+    const { provider, key, name } = req.body;
 
-    console.log('Received app key request:', { provider, key: key ? '***' + key.slice(-4) : 'undefined' });
+    console.log('Received app key request:', { provider, key: key ? '***' + key.slice(-4) : 'undefined', name });
 
     if (!provider || !key) {
       console.log('Missing provider or key:', { provider: !!provider, key: !!key });
@@ -783,7 +783,7 @@ router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req,
       const newAppKey = new APIKey({
         provider,
         key,
-        name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} App Key`,
+        name: name || `${provider.charAt(0).toUpperCase() + provider.slice(1)} App Key`,
         isAppKey: true,
         isActive: true
       });
