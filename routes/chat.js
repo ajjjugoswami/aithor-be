@@ -119,11 +119,10 @@ router.post('/send', authenticateToken, async (req, res) => {
     // Call AI service (you'll need to implement this based on your current AI integration)
     const aiResponse = await callAIService(messages, modelId, apiKey, provider);
 
-    // Increment quota if using app key
+    // Always include usage info for free providers (OpenAI and Gemini)
     let usageInfo = null;
-    if (usingAppKey) {
-      await incrementQuota(req.user.userId, provider);
-      // Get updated quota info
+    if (provider === 'openai' || provider === 'gemini') {
+      // Get current quota info
       const { UserQuota } = require('../models/APIKey');
       const userQuota = await UserQuota.findOne({ userId: req.user.userId, provider });
       if (userQuota) {
@@ -132,6 +131,15 @@ router.post('/send', authenticateToken, async (req, res) => {
           usedCalls: userQuota.usedCalls,
           maxFreeCalls: userQuota.maxFreeCalls
         };
+      }
+    }
+
+    // Increment quota if using app key
+    if (usingAppKey) {
+      await incrementQuota(req.user.userId, provider);
+      // Update usage info after increment
+      if (usageInfo) {
+        usageInfo.usedCalls += 1;
       }
     }
 
