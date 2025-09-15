@@ -32,10 +32,17 @@ const generateOTP = () => {
  */
 const storeOTP = (email, otp, expiryMinutes = 10) => {
   const expiryTime = Date.now() + (expiryMinutes * 60 * 1000);
-  otpStore.set(email.toLowerCase(), {
+  const emailKey = email.toLowerCase();
+
+  // Get existing data or initialize
+  const existingData = otpStore.get(emailKey) || { requestCount: 0 };
+
+  otpStore.set(emailKey, {
     otp,
     expiryTime,
-    attempts: 0
+    attempts: 0,
+    requestCount: existingData.requestCount + 1,
+    lastRequestTime: Date.now()
   });
 };
 
@@ -166,7 +173,27 @@ const sendOTPEmail = async (email, otp) => {
  */
 const sendVerificationOTP = async (email) => {
   try {
-     const otp = generateOTP();
+    const emailKey = email.toLowerCase();
+    const existingData = otpStore.get(emailKey);
+
+    // Check if user has exceeded the maximum number of OTP requests (3)
+    if (existingData && existingData.requestCount >= 3) {
+      // Check if it's been more than 24 hours since the last request
+      const timeSinceLastRequest = Date.now() - existingData.lastRequestTime;
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+
+      if (timeSinceLastRequest < twentyFourHours) {
+        return {
+          success: false,
+          message: 'Too many OTP requests. Please try again after 24 hours.'
+        };
+      } else {
+        // Reset the counter after 24 hours
+        otpStore.delete(emailKey);
+      }
+    }
+
+    const otp = generateOTP();
 
     // Store OTP
     storeOTP(email, otp);

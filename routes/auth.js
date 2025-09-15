@@ -316,6 +316,14 @@ router.post('/send-otp', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
+    // Check if user already exists and is verified
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser && existingUser.isVerified) {
+      return res.status(400).json({
+        error: 'User already exists and is verified. Please sign in instead.'
+      });
+    }
+
     const result = await sendVerificationOTP(email);
 
     if (result.success) {
