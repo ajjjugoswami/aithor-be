@@ -2,6 +2,52 @@
 
 Backend API for Aithor chat application with AI integration.
 
+## Setup
+
+### Environment Variables
+
+1. Copy the example environment file:
+```bash
+cp .env.example .env
+```
+
+2. Update the `.env` file with your actual values:
+```bash
+# Database Configuration
+MONGODB_URI=mongodb://localhost:27017/aithor
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-here-change-this-in-production
+
+# Email Service (Brevo/Sendinblue)
+BREVO_API_KEY=your-brevo-api-key-here
+BREVO_FROM_NAME=AIthor AI
+BREVO_FROM_EMAIL=noreply@aithor.com
+
+# Frontend URL (for password reset links)
+FRONTEND_URL=http://localhost:5173
+
+# Server Configuration
+PORT=8000
+NODE_ENV=development
+```
+
+### Installation
+
+```bash
+npm install
+```
+
+### Running the Server
+
+```bash
+# Development
+npm run dev
+
+# Production
+npm start
+```
+
 ## API Documentation
 
 This API is documented using Swagger/OpenAPI 3.0 specification.

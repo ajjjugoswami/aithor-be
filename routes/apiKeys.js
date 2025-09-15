@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const APIKey = require('../models/APIKey');
 const router = express.Router();
 
-// JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 
 /**
