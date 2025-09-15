@@ -152,7 +152,7 @@ app.get('/health', (req, res) => {
 });
 
 // Chat routes will be added here
-// app.use('/api/chat', require('./routes/chat'));
+app.use('/api/chat', require('./routes/chat'));
 
 // Auth routes
 app.use('/api/auth', require('./routes/auth'));

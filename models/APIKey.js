@@ -4,7 +4,7 @@ const apiKeySchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: function() { return !this.isAppKey; } // Not required for app keys
   },
   provider: {
     type: String,
@@ -37,6 +37,34 @@ const apiKeySchema = new mongoose.Schema({
   isDefault: {
     type: Boolean,
     default: false
+  },
+  isAppKey: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true
+});
+
+// User Quota Schema for tracking free API calls
+const userQuotaSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  provider: {
+    type: String,
+    required: true,
+    enum: ['openai', 'gemini']
+  },
+  usedCalls: {
+    type: Number,
+    default: 0
+  },
+  maxFreeCalls: {
+    type: Number,
+    default: 10
   }
 }, {
   timestamps: true
@@ -48,5 +76,9 @@ const apiKeySchema = new mongoose.Schema({
 //   for the same user and provider.
 apiKeySchema.index({ userId: 1, provider: 1 });
 apiKeySchema.index({ userId: 1, provider: 1, key: 1 }, { unique: true });
+userQuotaSchema.index({ userId: 1, provider: 1 }, { unique: true });
 
-module.exports = mongoose.model('APIKey', apiKeySchema);
+module.exports = {
+  APIKey: mongoose.model('APIKey', apiKeySchema),
+  UserQuota: mongoose.model('UserQuota', userQuotaSchema)
+};

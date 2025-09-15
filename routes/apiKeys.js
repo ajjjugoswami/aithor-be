@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const APIKey = require('../models/APIKey');
+const { APIKey, UserQuota } = require('../models/APIKey');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
@@ -115,6 +115,39 @@ const requireAdmin = (req, res, next) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
+};
+
+// Utility function to get app key for a provider
+const getAppKey = async (provider) => {
+  const keyDoc = await APIKey.findOne({ provider, isAppKey: true, isActive: true });
+  return keyDoc ? keyDoc.key : null;
+};
+
+// Utility function to check if user has quota remaining (only for free providers)
+const checkQuota = async (userId, provider) => {
+  // Only OpenAI and Gemini have free quotas
+  if (provider !== 'openai' && provider !== 'gemini') {
+    return false; // No quota system for other providers
+  }
+
+  let quota = await UserQuota.findOne({ userId, provider });
+  if (!quota) {
+    quota = new UserQuota({ userId, provider });
+    await quota.save();
+  }
+  return quota.usedCalls < quota.maxFreeCalls;
+};
+
+// Utility function to increment user's quota usage (only for free providers)
+const incrementQuota = async (userId, provider) => {
+  // Only increment quota for free providers
+  if (provider === 'openai' || provider === 'gemini') {
+    await UserQuota.findOneAndUpdate(
+      { userId, provider },
+      { $inc: { usedCalls: 1 } },
+      { upsert: true }
+    );
+  }
 };
 
 /**
@@ -744,4 +777,192 @@ router.patch('/admin/:userId/:keyId/active', authenticateToken, requireAdmin, as
   }
 });
 
-module.exports = router;
+/**
+ * @swagger
+ * /api/api-keys/admin/app-key:
+ *   post:
+ *     summary: Set app-owned API key for a provider (Admin only)
+ *     tags: [Admin API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - provider
+ *               - key
+ *             properties:
+ *               provider:
+ *                 type: string
+ *                 enum: [openai, gemini]
+ *               key:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: App key updated successfully
+ *       400:
+ *         description: Invalid request data
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.post('/admin/app-key', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { provider, key } = req.body;
+
+    if (!provider || !key) {
+      return res.status(400).json({ error: 'Provider and key are required' });
+    }
+
+    if (!['openai', 'gemini'].includes(provider)) {
+      return res.status(400).json({ error: 'Invalid provider. Must be openai or gemini' });
+    }
+
+    // Check if app key already exists for this provider
+    const existingKey = await APIKey.findOne({ provider, isAppKey: true });
+
+    if (existingKey) {
+      // Update existing key
+      existingKey.key = key;
+      existingKey.lastUsed = new Date();
+      await existingKey.save();
+    } else {
+      // Create new app key
+      const newAppKey = new APIKey({
+        provider,
+        key,
+        name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} App Key`,
+        isAppKey: true,
+        isActive: true
+      });
+      await newAppKey.save();
+    }
+
+    res.json({ message: 'App key updated successfully' });
+  } catch (error) {
+    console.error('Error setting app key:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/api-keys/admin/app-keys:
+ *   get:
+ *     summary: Get all app-owned API keys (Admin only)
+ *     tags: [Admin API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of app API keys
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/admin/app-keys', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const appKeys = await APIKey.find({ isAppKey: true }).select('-key');
+    res.json(appKeys);
+  } catch (error) {
+    console.error('Error fetching app keys:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/api-keys/admin/user-quotas:
+ *   get:
+ *     summary: Get user quotas (Admin only)
+ *     tags: [Admin API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         description: Filter by user ID
+ *     responses:
+ *       200:
+ *         description: List of user quotas
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/admin/user-quotas', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const query = userId ? { userId } : {};
+    // Only return quotas for free providers (OpenAI and Gemini)
+    query.provider = { $in: ['openai', 'gemini'] };
+    const quotas = await UserQuota.find(query).populate('userId', 'email name');
+    res.json(quotas);
+  } catch (error) {
+    console.error('Error fetching user quotas:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/api-keys/admin/reset-quota/{userId}/{provider}:
+ *   post:
+ *     summary: Reset user quota for a provider (Admin only)
+ *     tags: [Admin API Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: provider
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [openai, gemini]
+ *     responses:
+ *       200:
+ *         description: Quota reset successfully
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.post('/admin/reset-quota/:userId/:provider', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, provider } = req.params;
+
+    if (!['openai', 'gemini'].includes(provider)) {
+      return res.status(400).json({ error: 'Can only reset quotas for OpenAI and Gemini providers' });
+    }
+
+    await UserQuota.findOneAndUpdate(
+      { userId, provider },
+      { usedCalls: 0 },
+      { upsert: true }
+    );
+
+    res.json({ message: 'Quota reset successfully' });
+  } catch (error) {
+    console.error('Error resetting quota:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = {
+  router,
+  getAppKey,
+  checkQuota,
+  incrementQuota
+};
