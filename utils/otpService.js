@@ -8,6 +8,11 @@ apiKey.apiKey = process.env.BREVO_API_KEY;
 
 const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
+// Check if API key is configured
+if (!process.env.BREVO_API_KEY || process.env.BREVO_API_KEY === 'YOUR_BREVO_API_KEY_HERE') {
+  console.warn('BREVO_API_KEY is not configured. Email sending will fail.');
+}
+
 // OTP storage (in production, use Redis or database)
 const otpStore = new Map();
 
@@ -135,9 +140,21 @@ const sendOTPEmail = async (email, otp) => {
 
   } catch (error) {
     console.error('Error sending OTP email:', error);
+
+    let errorMessage = 'Failed to send OTP email';
+    if (error.message) {
+      if (error.message.includes('api-key')) {
+        errorMessage = 'Email service not configured. Please check API key.';
+      } else if (error.message.includes('sender')) {
+        errorMessage = 'Sender email not verified. Please verify sender email in Brevo dashboard.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
     return {
       success: false,
-      error: error.message || 'Failed to send OTP email'
+      error: errorMessage
     };
   }
 };
