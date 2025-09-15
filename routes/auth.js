@@ -484,11 +484,33 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Check if user is locked out
+    if (user.lockoutUntil && user.lockoutUntil > new Date()) {
+      const remainingTime = Math.ceil((user.lockoutUntil - new Date()) / (1000 * 60 * 60)); // hours
+      return res.status(429).json({ error: `Account locked due to too many failed attempts. Try again in ${remainingTime} hours.` });
+    }
+
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      // Increment failed attempts
+      user.failedAttempts = (user.failedAttempts || 0) + 1;
+
+      // Lock account if 3 failed attempts
+      if (user.failedAttempts >= 3) {
+        user.lockoutUntil = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        await user.save();
+        return res.status(429).json({ error: 'Account locked due to too many failed attempts. Try again in 24 hours.' });
+      }
+
+      await user.save();
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    // Successful login: reset failed attempts and lockout
+    user.failedAttempts = 0;
+    user.lockoutUntil = undefined;
+    await user.save();
 
     // Generate JWT token
     const token = jwt.sign(
