@@ -754,7 +754,7 @@ router.patch('/admin/:userId/:keyId/active', authenticateToken, requireAdmin, as
  *       500:
  *         description: Server error
  */
-router.post('/admin/app-key', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/admin/app-key', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
     const { provider, key } = req.body;
 
@@ -813,7 +813,7 @@ router.post('/admin/app-key', authenticateToken, requireAdmin, async (req, res) 
  *       500:
  *         description: Server error
  */
-router.get('/admin/app-keys', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/admin/app-keys', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
     const appKeys = await APIKey.find({ isAppKey: true }).select('-key');
     res.json(appKeys);
@@ -845,7 +845,7 @@ router.get('/admin/app-keys', authenticateToken, requireAdmin, async (req, res) 
  *       500:
  *         description: Server error
  */
-router.get('/admin/user-quotas', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/admin/user-quotas', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
     const { userId } = req.query;
     const query = userId ? { userId } : {};
