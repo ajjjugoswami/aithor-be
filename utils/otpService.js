@@ -134,12 +134,12 @@ const sendOTPEmail = async (email, otp) => {
     `;
     sendSmtpEmail.sender = {
       name: process.env.BREVO_FROM_NAME || 'Aithor AI',
-      email: process.env.BREVO_FROM_EMAIL || 'noreply@aithor.com'
+      email: process.env.BREVO_FROM_EMAIL || 'aithor060@gmail.com'
     };
     sendSmtpEmail.to = [{ email: email }];
     sendSmtpEmail.replyTo = {
       name: process.env.BREVO_FROM_NAME || 'Aithor AI',
-      email: process.env.BREVO_FROM_EMAIL || 'noreply@aithor.com'
+      email: process.env.BREVO_FROM_EMAIL || 'aithor060@gmail.com'
     };
 
     const result = await apiInstance.sendTransacEmail(sendSmtpEmail);

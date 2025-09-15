@@ -22,7 +22,7 @@ JWT_SECRET=your-super-secret-jwt-key-here-change-this-in-production
 # Email Service (Brevo/Sendinblue)
 BREVO_API_KEY=your-brevo-api-key-here
 BREVO_FROM_NAME=AIthor AI
-BREVO_FROM_EMAIL=noreply@aithor.com
+BREVO_FROM_EMAIL=aithor060@gmail.com
 
 # Frontend URL (for password reset links)
 FRONTEND_URL=http://localhost:5173
