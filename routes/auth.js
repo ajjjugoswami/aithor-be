@@ -418,7 +418,7 @@ router.post('/signup-with-otp', async (req, res) => {
   }
 });
 
-// Google OAuth signup/login (placeholder for now)
+// Google OAuth signup (placeholder for now)
 router.post('/google-auth', async (req, res) => {
   try {
     const { credential } = req.body;

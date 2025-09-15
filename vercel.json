@@ -14,6 +14,10 @@
   ],
   "env": {
     "PORT": "8000",
-    "MONGODB_URI": "mongodb+srv://Vercel-Admin-aithor-db:hEpso72ONGjEVrLK@aithor-db.st8w7su.mongodb.net/?retryWrites=true&w=majority"
+    "MONGODB_URI": "mongodb+srv://Vercel-Admin-aithor-db:hEpso72ONGjEVrLK@aithor-db.st8w7su.mongodb.net/?retryWrites=true&w=majority",
+    "JWT_SECRET": "your_jwt_secret_here",
+    "BREVO_API_KEY": "YOUR_BREVO_API_KEY_HERE",
+    "BREVO_FROM_EMAIL": "goswamiajay526@gmail.com",
+    "BREVO_FROM_NAME": "Aithor"
   }
-}
+  }
