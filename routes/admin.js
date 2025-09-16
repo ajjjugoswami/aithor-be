@@ -123,6 +123,53 @@ router.post('/app-key', authenticateToken, /* requireAdmin, */ async (req, res) 
 
 /**
  * @swagger
+ * /api/admin/app-key/{keyId}/toggle:
+ *   patch:
+ *     summary: Toggle active status of an app key (Admin only)
+ *     tags: [Admin App Keys]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: keyId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: App key ID
+ *     responses:
+ *       200:
+ *         description: App key status toggled successfully
+ *       404:
+ *         description: App key not found
+ *       500:
+ *         description: Server error
+ */
+router.patch('/app-key/:keyId/toggle', authenticateToken, /* requireAdmin, */ async (req, res) => {
+  try {
+    const { keyId } = req.params;
+
+    const appKey = await AppKey.findById(keyId);
+    if (!appKey) {
+      return res.status(404).json({ error: 'App key not found' });
+    }
+
+    // Toggle the active status
+    appKey.isActive = !appKey.isActive;
+    appKey.lastUsed = new Date();
+    await appKey.save();
+
+    res.json({ 
+      message: `App key ${appKey.isActive ? 'activated' : 'deactivated'} successfully`,
+      isActive: appKey.isActive
+    });
+  } catch (error) {
+    console.error('Error toggling app key status:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
  * /api/admin/user-quotas:
  *   get:
  *     summary: Get user quotas (Admin only)
