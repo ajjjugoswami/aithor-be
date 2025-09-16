@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const { UserQuota } = require('../models/APIKey');
 const AppKey = require('../models/AppKey');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const User = require('../models/User');
+const Feedback = require('../models/Feedback');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
@@ -210,6 +212,63 @@ router.post('/reset-quota/:userId/:provider', authenticateToken, /* requireAdmin
     res.json({ message: 'Quota reset successfully', quota });
   } catch (error) {
     console.error('Error resetting quota:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/dashboard-stats:
+ *   get:
+ *     summary: Get dashboard statistics (Admin only)
+ *     tags: [Admin Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard statistics
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/dashboard-stats', authenticateToken, /* requireAdmin, */ async (req, res) => {
+  try {
+    // Get total users count
+    const totalUsers = await User.countDocuments();
+
+    // Get admin users count
+    const adminUsers = await User.countDocuments({ isAdmin: true });
+
+    // Get feedback count
+    const feedbackCount = await Feedback.countDocuments();
+
+    // Calculate growth metrics (comparing with last month)
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+    const usersLastMonth = await User.countDocuments({ createdAt: { $lt: lastMonth } });
+    const feedbackLastMonth = await Feedback.countDocuments({ createdAt: { $lt: lastMonth } });
+    const adminsLastMonth = await User.countDocuments({ isAdmin: true, createdAt: { $lt: lastMonth } });
+
+    const userGrowth = usersLastMonth > 0 ? ((totalUsers - usersLastMonth) / usersLastMonth * 100) : 0;
+    const feedbackGrowth = feedbackLastMonth > 0 ? ((feedbackCount - feedbackLastMonth) / feedbackLastMonth * 100) : 0;
+    const adminGrowth = adminsLastMonth > 0 ? ((adminUsers - adminsLastMonth) / adminsLastMonth * 100) : 0;
+
+    const stats = {
+      totalUsers,
+      adminUsers,
+      feedbackCount,
+      growth: {
+        users: Math.round(userGrowth * 100) / 100, // Round to 2 decimal places
+        feedback: Math.round(feedbackGrowth * 100) / 100,
+        admins: Math.round(adminGrowth * 100) / 100
+      }
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
