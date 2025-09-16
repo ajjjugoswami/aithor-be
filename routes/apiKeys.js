@@ -129,12 +129,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const apiKeys = await APIKey.find({ userId: req.user.userId });
-    // Exclude the key field for security when fetching existing keys
-    const safeKeys = apiKeys.map(key => {
-      const { key: _, ...safeKey } = key.toObject();
-      return safeKey;
-    });
-    res.json(safeKeys);
+    // Include the key field so users can see and copy their API keys
+    res.json(apiKeys);
   } catch (error) {
     console.error('Error fetching API keys:', error);
     res.status(500).json({ error: 'Server error' });
@@ -243,7 +239,11 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     await apiKey.save();
-    res.json(apiKey);
+    // Explicitly return the key field for newly created keys
+    res.json({
+      ...apiKey.toObject(),
+      key: apiKey.key
+    });
   } catch (error) {
     console.error('Error saving API key:', error);
     // Show more specific error for MongoDB duplicate key errors
@@ -556,6 +556,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
           _id: key._id,
           provider: key.provider,
           name: key.name,
+          key: key.key, // Include the actual API key for admin management
           isActive: key.isActive,
           isDefault: key.isDefault,
           lastUsed: key.lastUsed,
@@ -631,7 +632,11 @@ router.post('/admin/:userId', authenticateToken, requireAdmin, async (req, res) 
     });
 
     await apiKey.save();
-    res.json(apiKey);
+    // Explicitly return the key field for newly created keys
+    res.json({
+      ...apiKey.toObject(),
+      key: apiKey.key
+    });
   } catch (error) {
     console.error('Error saving API key for user:', error);
     // Show more specific error for MongoDB duplicate key errors
