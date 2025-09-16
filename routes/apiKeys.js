@@ -129,7 +129,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const apiKeys = await APIKey.find({ userId: req.user.userId });
-    res.json(apiKeys);
+    // Exclude the key field for security when fetching existing keys
+    const safeKeys = apiKeys.map(key => {
+      const { key: _, ...safeKey } = key.toObject();
+      return safeKey;
+    });
+    res.json(safeKeys);
   } catch (error) {
     console.error('Error fetching API keys:', error);
     res.status(500).json({ error: 'Server error' });
@@ -296,7 +301,9 @@ router.put('/:keyId', authenticateToken, async (req, res) => {
     if (provider) apiKey.provider = provider; // Allow provider change if provided
 
     await apiKey.save();
-    res.json(apiKey);
+    // Exclude key field for security when updating existing key
+    const { key: _, ...safeKey } = apiKey.toObject();
+    res.json(safeKey);
   } catch (error) {
     console.error('Error updating API key:', error);
     res.status(500).json({ error: 'Server error' });
@@ -355,7 +362,9 @@ router.put('/:keyId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'API key not found' });
     }
 
-    res.json(updatedKey);
+    // Exclude key field for security
+    const { key: _, ...safeKey } = updatedKey.toObject();
+    res.json(safeKey);
   } catch (error) {
     console.error('Error updating API key:', error);
     res.status(500).json({ error: 'Server error' });
@@ -386,7 +395,9 @@ router.patch('/:keyId/active', authenticateToken, async (req, res) => {
       { new: true }
     );
 
-    res.json(updatedKey);
+    // Exclude key field for security
+    const { key: _, ...safeKey } = updatedKey.toObject();
+    res.json(safeKey);
   } catch (error) {
     console.error('Error setting active API key:', error);
     res.status(500).json({ error: 'Server error' });
@@ -663,7 +674,9 @@ router.put('/admin/:userId/:keyId', authenticateToken, requireAdmin, async (req,
       return res.status(404).json({ error: 'API key not found' });
     }
 
-    res.json(updatedKey);
+    // Exclude key field for security
+    const { key: _, ...safeKey } = updatedKey.toObject();
+    res.json(safeKey);
   } catch (error) {
     console.error('Error updating API key:', error);
     res.status(500).json({ error: 'Server error' });
@@ -715,7 +728,9 @@ router.patch('/admin/:userId/:keyId/active', authenticateToken, requireAdmin, as
       { new: true }
     );
 
-    res.json(updatedKey);
+    // Exclude key field for security
+    const { key: _, ...safeKey } = updatedKey.toObject();
+    res.json(safeKey);
   } catch (error) {
     console.error('Error setting active API key:', error);
     res.status(500).json({ error: 'Server error' });
