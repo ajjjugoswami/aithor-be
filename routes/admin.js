@@ -27,7 +27,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
  */
 router.get('/app-keys', authenticateToken, /* requireAdmin, */ async (req, res) => {
   try {
-    const appKeys = await AppKey.find({}).select('-key');
+    const appKeys = await AppKey.find({});
     res.json(appKeys);
   } catch (error) {
     console.error('Error fetching app keys:', error);
