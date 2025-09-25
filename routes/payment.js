@@ -163,7 +163,7 @@ router.post('/create-qr', authenticateToken, async (req, res) => {
 
     // Create UPI payment string
     // Format: upi://pay?pa=merchant@upi&pn=MerchantName&am=Amount&cu=CURRENCY&tn=Description
-    const upiString = `upi://pay?pa=aithor@upi&pn=AI%20Thor&am=${amountInRupees}&cu=${currency}&tn=${encodeURIComponent(description)}&tr=${userId}_${Date.now()}`;
+    const upiString = `upi://pay?pa=7082072347@ptsbi&pn=AI%20Thor&am=${amountInRupees}&cu=${currency}&tn=${encodeURIComponent(description)}&tr=${userId}_${Date.now()}`;
 
     // Generate QR code as data URL
     const qrCodeDataURL = await QRCode.toDataURL(upiString, {
