@@ -34,6 +34,13 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isPremium: {
+    type: Boolean,
+    default: false
+  },
+  premiumExpiresAt: {
+    type: Date
+  },
   resetPasswordToken: {
     type: String
   },

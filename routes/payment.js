@@ -1,6 +1,8 @@
 const express = require('express');
 const Razorpay = require('razorpay');
 const router = express.Router();
+const User = require('../models/User');
+const { authenticateToken } = require('../middleware/auth');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -120,6 +122,143 @@ router.post('/verify', async (req, res) => {
       message: 'Payment verification error',
       error: error.message
     });
+  }
+});
+
+/**
+ * @swagger
+ * /api/payment/create-qr:
+ *   post:
+ *     summary: Create a Razorpay QR code for payment
+ *     tags: [Payment]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - currency
+ *             properties:
+ *               amount: { type: number, description: "Amount in paisa (1 INR = 100 paisa)" }
+ *               currency: { type: string, default: "INR" }
+ *               description: { type: string, description: "Payment description" }
+ *     responses:
+ *       200:
+ *         description: QR code created successfully
+ *       500:
+ *         description: Server error
+ */
+router.post('/create-qr', authenticateToken, async (req, res) => {
+  try {
+    const { amount, currency = 'INR', description = 'Account Upgrade' } = req.body;
+
+    // Get user from auth middleware
+    const userId = req.user.id;
+
+    const qrData = {
+      type: 'upi_qr',
+      name: 'AI Thor',
+      usage: 'single_use',
+      fixed_amount: true,
+      payment_amount: amount, // amount in paisa
+      description: description,
+      customer_id: userId,
+      close_by: Math.floor(Date.now() / 1000) + 3600, // Close after 1 hour
+    };
+
+    const qr = await razorpay.qrCode.create(qrData);
+
+    res.json({
+      success: true,
+      qr: qr,
+      qr_string: qr.image_url, // This is the QR code image URL
+      qr_id: qr.id
+    });
+  } catch (error) {
+    console.error('Error creating Razorpay QR:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create QR code',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/payment/webhook:
+ *   post:
+ *     summary: Handle Razorpay webhooks for payment verification
+ *     tags: [Payment]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               event: { type: string }
+ *               payment: { type: object }
+ *               qr_code: { type: object }
+ *     responses:
+ *       200:
+ *         description: Webhook processed successfully
+ *       500:
+ *         description: Server error
+ */
+router.post('/webhook', async (req, res) => {
+  try {
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'your_webhook_secret';
+    const signature = req.headers['x-razorpay-signature'];
+
+    // Verify webhook signature
+    const expectedSignature = require('crypto')
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+
+    if (signature !== expectedSignature) {
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
+    const event = req.body.event;
+
+    if (event === 'payment.captured') {
+      // Payment was successful - upgrade user account
+      const payment = req.body.payload.payment.entity;
+      console.log('Payment captured:', payment.id);
+
+      try {
+        // Find user by customer_id from payment entity
+        const customerId = payment.customer_id || payment.notes?.customer_id;
+
+        if (customerId && customerId !== 'guest') {
+          const user = await User.findById(customerId);
+          if (user) {
+            // Upgrade user to premium for 30 days
+            user.isPremium = true;
+            user.premiumExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+            await user.save();
+
+            console.log(`User ${user.email} upgraded to premium`);
+
+            // TODO: Send confirmation email
+          }
+        }
+      } catch (error) {
+        console.error('Error upgrading user:', error);
+      }
+
+    } else if (event === 'qr_code.activated') {
+      console.log('QR code activated');
+    }
+
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
