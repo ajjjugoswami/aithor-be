@@ -149,6 +149,9 @@ app.use('/api/admin', require('./routes/admin'));
 // Feedback routes
 app.use('/api/feedback', require('./routes/feedback'));
 
+// Payment routes
+app.use('/api/payment', require('./routes/payment'));
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
