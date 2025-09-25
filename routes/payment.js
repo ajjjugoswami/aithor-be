@@ -3,6 +3,7 @@ const Razorpay = require('razorpay');
 const router = express.Router();
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
+const QRCode = require('qrcode');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -157,27 +158,44 @@ router.post('/create-qr', authenticateToken, async (req, res) => {
     // Get user from auth middleware
     const userId = req.user.id;
 
-    const qrData = {
-      type: 'upi_qr',
-      name: 'AI Thor',
-      usage: 'single_use',
-      fixed_amount: true,
-      payment_amount: amount, // amount in paisa
-      description: description,
-      customer_id: userId,
-      close_by: Math.floor(Date.now() / 1000) + 3600, // Close after 1 hour
-    };
+    // Convert amount from paisa to rupees for UPI
+    const amountInRupees = (amount / 100).toFixed(2);
 
-    const qr = await razorpay.qrCode.create(qrData);
+    // Create UPI payment string
+    // Format: upi://pay?pa=merchant@upi&pn=MerchantName&am=Amount&cu=CURRENCY&tn=Description
+    const upiString = `upi://pay?pa=aithor@upi&pn=AI%20Thor&am=${amountInRupees}&cu=${currency}&tn=${encodeURIComponent(description)}&tr=${userId}_${Date.now()}`;
+
+    // Generate QR code as data URL
+    const qrCodeDataURL = await QRCode.toDataURL(upiString, {
+      width: 256,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+
+    // Generate unique QR ID
+    const qrId = `qr_${userId}_${Date.now()}`;
 
     res.json({
       success: true,
-      qr: qr,
-      qr_string: qr.image_url, // This is the QR code image URL
-      qr_id: qr.id
+      qr: {
+        id: qrId,
+        image_url: qrCodeDataURL,
+        status: 'active',
+        type: 'upi_qr',
+        usage: 'single_use',
+        customer_id: userId,
+        payment_amount: amount,
+        close_by: Math.floor(Date.now() / 1000) + 3600
+      },
+      qr_string: qrCodeDataURL,
+      qr_id: qrId,
+      upi_string: upiString
     });
   } catch (error) {
-    console.error('Error creating Razorpay QR:', error);
+    console.error('Error creating QR code:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create QR code',
