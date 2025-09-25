@@ -151,12 +151,12 @@ router.post('/verify', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.post('/create-qr', authenticateToken, async (req, res) => {
+router.post('/create-qr', async (req, res) => {
   try {
     const { amount, currency = 'INR', description = 'Account Upgrade' } = req.body;
 
-    // Get user from auth middleware
-    const userId = req.user.id;
+    // Get user from auth middleware or use guest
+    const userId = req.user?.id || 'guest';
 
     // Convert amount from paisa to rupees for UPI
     const amountInRupees = (amount / 100).toFixed(2);
